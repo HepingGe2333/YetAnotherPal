@@ -67,3 +67,32 @@ tasks.register<Jar>("fatJar") {
         exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
     }
 }
+
+
+/**
+ * 桌面端真人测试工具（无 UI）：复用 agentd 的存储/提示词/工具/记忆/心情/日记/进化逻辑，
+ * 只在终端里对话。`./gradlew :agentd:desktop --args="--data /tmp/yap-desktop ..."`。
+ */
+tasks.register<JavaExec>("desktop") {
+    group = "application"
+    description = "Run the terminal-only prompt-engineering test console."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.yap.agentd.desktop.DesktopMainKt")
+    standardInput = System.`in`
+}
+
+tasks.register<Jar>("desktopJar") {
+    group = "distribution"
+    description = "Self-contained terminal console jar."
+    archiveClassifier.set("desktop")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes["Main-Class"] = "com.yap.agentd.desktop.DesktopMainKt" }
+    from(sourceSets.main.get().output)
+    from({
+        configurations.runtimeClasspath.get().map { file ->
+            if (file.isDirectory) file else zipTree(file)
+        }
+    }) {
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    }
+}

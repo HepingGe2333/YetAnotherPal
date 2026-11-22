@@ -2119,3 +2119,18 @@ The default can be overridden by the deployment: `--reasoning-effort low|medium|
 `LlmConfig.reasoningEffort`. An unknown value fails at startup / with `llm_invalid_config` instead
 of being silently ignored. `ToolCallOnlyTest` pins the request bodies (`low` → `high` → `low`), the
 config override, the auxiliary calls, and the rejection.
+
+## 桌面端真人测试工具（无 UI）
+
+`DesktopMain` 直接复用本模块的存储、提示词、工具回路、记忆、心情、日记、人格进化与消息队列，
+只在终端里对话；用于在电脑上真人测试提示词工程效果。
+
+```bash
+./gradlew :agentd:desktopJar
+java -jar agentd/build/libs/agentd-desktop.jar \
+  --data /tmp/yap-desktop \
+  --llm-base-url http://127.0.0.1:11435/v1 --llm-key "$KEY" --llm-model campus-chat
+```
+
+命令：`/personas`、`/use <n|id>`、`/new [persona]`、`/state`、`/tools`、`/system`、`/help`、`/quit`。
+工具调用、流式文字、tokens/耗时都会打印；数据与 agentd 共享同一套 `FileStore` 结构。
