@@ -67,6 +67,19 @@ public struct AppSettings: Equatable, Sendable {
     /// 进聊天前把人设/世界/话风翻成当前界面语言；关掉就永远用原文。
     public var autoTranslatePersona: Bool
 
+    // MARK: 语音转写（ASR，0.15）
+
+    /// 语音/视频发出去之前先转成文字（**默认关**：这是要花另一次请求的事，得用户自己开）。
+    ///
+    /// 只影响「有没有转写」：关掉时语音/视频照发不误（模型仍然能听，见 `MediaModality`）。
+    public var asrEnabled: Bool
+    /// 转写服务的 OpenAI 兼容地址（默认 DeepSeek 官方；空 = 用默认值）。
+    public var asrBaseUrl: String
+    /// 转写模型名（默认 `whisper-1`；空 = 用默认值）。
+    public var asrModel: String
+    /// 转写 Key **不在这里**：它只存在 Keychain（`ApiKeyStore.asrAPIKey()`），
+    /// 不进 UserDefaults、不进备份、也不进日志。见 `Data/ApiKeyStore.swift`。
+
     public init(
         themeMode: ThemeMode = .system,
         accentColor: Int64 = 0xFFC76F4E,
@@ -82,7 +95,10 @@ public struct AppSettings: Equatable, Sendable {
         backgroundTipDismissed: Bool = false,
         heartbeatLastResetAt: Int64 = 0,
         heartbeatLastFiredAt: Int64? = nil,
-        autoTranslatePersona: Bool = true
+        autoTranslatePersona: Bool = true,
+        asrEnabled: Bool = false,
+        asrBaseUrl: String = AsrConfig.defaultBaseUrl,
+        asrModel: String = AsrConfig.defaultModel
     ) {
         self.themeMode = themeMode
         self.accentColor = accentColor
@@ -99,6 +115,9 @@ public struct AppSettings: Equatable, Sendable {
         self.heartbeatLastResetAt = heartbeatLastResetAt
         self.heartbeatLastFiredAt = heartbeatLastFiredAt
         self.autoTranslatePersona = autoTranslatePersona
+        self.asrEnabled = asrEnabled
+        self.asrBaseUrl = asrBaseUrl
+        self.asrModel = asrModel
     }
 }
 
@@ -106,6 +125,8 @@ public struct AppSettings: Equatable, Sendable {
 
 public extension AppSettings {
     /// 可移植的那部分。设备路径与纯本地的引导状态不带走（见 BackupSettings 注释）。
+    /// 语音转写**不进备份**：Key 本来就在 Keychain 里（备份只读数据库 + 白名单设置字段），
+    /// 地址与模型也只是「这台设备上怎么连服务」的偏好，换机时重填一次比带一份陌生地址更安全。
     func toBackupSettings() -> BackupSettings {
         BackupSettings(
             themeMode: themeMode.stored,
@@ -168,6 +189,9 @@ public final class SettingsStore {
         case heartbeatLastResetAt = "heartbeat_last_reset_at"
         case heartbeatLastFiredAt = "heartbeat_last_fired_at"
         case autoTranslatePersona = "auto_translate_persona"
+        case asrEnabled = "asr_enabled"
+        case asrBaseUrl = "asr_base_url"
+        case asrModel = "asr_model"
     }
 
     public let defaults: UserDefaults
@@ -195,7 +219,12 @@ public final class SettingsStore {
             backgroundTipDismissed: bool(.backgroundTipDismissed, fallback.backgroundTipDismissed),
             heartbeatLastResetAt: integer(.heartbeatLastResetAt) ?? fallback.heartbeatLastResetAt,
             heartbeatLastFiredAt: integer(.heartbeatLastFiredAt),
-            autoTranslatePersona: bool(.autoTranslatePersona, fallback.autoTranslatePersona)
+            autoTranslatePersona: bool(.autoTranslatePersona, fallback.autoTranslatePersona),
+            // 语音转写：没写过 / 被清成空串都回到代码里的默认值
+            //（用户在设置页把地址删空 = 「用默认地址」，不该变成「一个空地址」）。
+            asrEnabled: bool(.asrEnabled, fallback.asrEnabled),
+            asrBaseUrl: nonEmptyString(.asrBaseUrl) ?? fallback.asrBaseUrl,
+            asrModel: nonEmptyString(.asrModel) ?? fallback.asrModel
         )
     }
 
@@ -217,6 +246,9 @@ public final class SettingsStore {
         setInteger(settings.heartbeatLastResetAt, .heartbeatLastResetAt)
         setInteger(settings.heartbeatLastFiredAt, .heartbeatLastFiredAt)
         defaults.set(settings.autoTranslatePersona, forKey: Key.autoTranslatePersona.rawValue)
+        defaults.set(settings.asrEnabled, forKey: Key.asrEnabled.rawValue)
+        setString(settings.asrBaseUrl, .asrBaseUrl)
+        setString(settings.asrModel, .asrModel)
     }
 
     /// 恢复默认：清掉所有键，而不是写一份默认值（两者在「以后加字段」时行为不同：
@@ -254,6 +286,13 @@ public final class SettingsStore {
 
     private func string(_ key: Key) -> String? {
         defaults.string(forKey: key.rawValue)
+    }
+
+    /// 读一个「空串等于没写」的字符串（地址/模型名这类有默认值的字段用）。
+    private func nonEmptyString(_ key: Key) -> String? {
+        guard let value = defaults.string(forKey: key.rawValue)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        return value
     }
 
     private func bool(_ key: Key, _ fallback: Bool) -> Bool {

@@ -60,7 +60,8 @@ extension ToolCatalog {
     /// 英文版「# What you can do」段（结构逐行对应中文版，便于两端对照维护）。
     public static func englishCapabilityPrompt(webEnabled: Bool) -> String {
         var lines: [String] = [
-            PromptTemplates.title(section: .capabilities, language: .en),
+            PromptTemplates.title(section: .capabilities, language: .en)
+        ] + englishOutboundProtocol() + [
             englishCapabilityLead,
             englishMemoryDiscipline
         ]
@@ -81,9 +82,27 @@ extension ToolCatalog {
             englishToolBlockExample,
             "```",
             "",
-            "The result is handed back to you; say it in your own voice, don't read the block out to them."
+            "The result is handed back to you; if you want to say something, call send_message — "
+                + "don't read the block out to them."
         ])
         return lines.joined(separator: "\n")
+    }
+
+    /// 英文的「怎么说话」三条（0.16，`spec/tool-call-agents/README.md` §1）。
+    ///
+    /// 与中文 `ToolCatalog.outboundProtocolLines()` 一一对应；数字同样取自
+    /// `MessageRhythm`（上限只有一处定义，中英文不能各写一个 4）。
+    public static func englishOutboundProtocol() -> [String] {
+        [
+            "## How you speak",
+            "You can only speak through send_message: every sentence they should see must call send_message(text). "
+                + "Plain assistant text is not delivered — they won't see it.",
+            "If you don't want to say anything this turn, call stay_silent (it only marks the turn read). "
+                + "Calling neither counts as a protocol violation.",
+            "At most \(MessageRhythm.maxMessagesPerRound) send_message calls per turn and "
+                + "\(MessageRhythm.maxMessageChars) characters each; one sentence at a time, "
+                + "don't split a reply just to fill the quota."
+        ]
     }
 
     /// 某个工具的英文一句话说明；表里没有就回退中文原文（宁可中英混排，也不要少一句说明）。
@@ -155,8 +174,8 @@ extension ToolCatalog {
             "Use it when they send a video and you need to see what happened; you only get a few key "
             + "frames, so say when you can't tell.",
         sendMessage:
-            "Use it to send a few short messages, one sentence each (max 4 per turn, 120 chars "
-            + "each); for a normal single reply, just answer.",
+            "Your only way to speak: every sentence they see must go through it; plain text is never "
+            + "delivered. Max 4 per turn, 120 chars each.",
         blockUser:
             "Last resort for repeated boundary pushing: the first call only proposes (1–24h); confirm "
             + "only after they message you again."
@@ -182,7 +201,7 @@ extension ToolCatalog {
         sticker: "send really posts a sticker (they see it at once); make only creates one in your library; save just keeps one.",
         listen: "Hands that audio to you once; nothing is stored or sent, and there is no transcript.",
         watch: "Shows you a few frames of that video; nothing is stored or sent, and you shouldn't invent the rest.",
-        sendMessage: "It only splits your words into messages; don't flood them, and at most 4 per turn.",
+        sendMessage: "They really receive it at once; it is your only way to speak, plain text never reaches them. Don't flood them — at most 4 per turn.",
         blockUser: "Blocks them once a second call confirms; they see they're blocked until it expires."
     ]
 }

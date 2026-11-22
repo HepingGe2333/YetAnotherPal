@@ -82,22 +82,31 @@ class ToolExecutor(
         val outgoing: OutgoingMessages = OutgoingMessages()
     )
 
+    /**
+     * 一条已经「发出去」的消息：正文 + 提前分配好的 messageId。
+     *
+     * 0.16：`send_message` 的工具结果要把 messageId 回给模型（「已发送，messageId=…」），所以 id
+     * 在执行工具时就用 [FileStore.newMessageId] 分配好；`ChatService` 落库时**用同一个 id**。
+     * 这样模型看到的消息 id 与客户端之后收到的那条真消息一致，不是编的。
+     */
+    data class SentMessage(val text: String, val messageId: String)
+
     /** 一轮里已经发出的短消息（`send_message`）；跨工具调用共享，线程模型是「单轮内串行」。 */
     class OutgoingMessages(private val max: Int = MAX_MESSAGES_PER_TURN) {
-        private val sent = ArrayList<String>()
+        private val sent = ArrayList<SentMessage>()
 
         fun canSend(): Boolean = sent.size < max
 
         fun remaining(): Int = (max - sent.size).coerceAtLeast(0)
 
-        fun add(text: String): Boolean {
+        fun add(text: String, messageId: String): Boolean {
             if (!canSend()) return false
-            sent += text
+            sent += SentMessage(text, messageId)
             return true
         }
 
         /** 本轮已经发出的消息（按发送顺序；`ChatService` 按它逐条落库）。 */
-        fun all(): List<String> = sent.toList()
+        fun all(): List<SentMessage> = sent.toList()
     }
 
     /**
@@ -117,6 +126,14 @@ class ToolExecutor(
         val attachments: List<String> = emptyList(),
         /** `send_message` 真的发出去的那一条（其它工具为 null）；生成器按顺序收集成多条消息。 */
         val sentMessage: String? = null,
+        /** 与 [sentMessage] 配套的 messageId（0.16：工具结果里要回给模型）。 */
+        val sentMessageId: String? = null,
+        /**
+         * 0.16：模型调用了 `think` —— 这一轮**后续**请求的 `reasoning_effort` 升到 `high`。
+         *
+         * 由 `LlmReplyGenerator` 读走（它持有一轮的思考强度状态）；工具本身没有任何副作用。
+         */
+        val deepThinking: Boolean = false,
         /**
          * 0.14.1：要给模型看的**多模态内容**（`listen` 的音频 / `watch` 的关键帧）。
          *
@@ -163,6 +180,7 @@ class ToolExecutor(
         val args = parseArgs(argumentsJson)
         return try {
             when (name.trim()) {
+                ServerToolCatalog.THINK -> think(args, context)
                 ServerToolCatalog.STAY_SILENT -> staySilent(args, context)
                 ServerToolCatalog.DEFER_REPLY -> deferReply(args, context)
                 ServerToolCatalog.SET_MOOD -> setMood(args, context)
@@ -190,6 +208,35 @@ class ToolExecutor(
             // 工具自己的 bug 也不该打挂这一轮回复：回一条「没做成」，让模型决定怎么说。
             failure(name, "${failure::class.simpleName}: ${failure.message}", "工具执行失败")
         }
+    }
+
+    // ------------------------------------------------------------------ think（0.16）
+
+    /**
+     * `think`：**没有副作用**，只把这一轮后续请求的思考强度升到 `high`。
+     *
+     * 为什么服务端要执行它：思考强度是请求参数（`reasoning_effort`），模型自己改不了；
+     * 它只能通过「调用一个工具」来表达「这里需要想清楚」，由 `LlmReplyGenerator` 在下一轮
+     * 请求里换成 `high`。这一轮结束后生成器重建状态，自然回到默认 `low`。
+     *
+     * 工具结果仍然是一条普通回执（协议完整），不写任何存储、不发 SSE 卡片以外的东西。
+     */
+    private fun think(args: JsonValue.Obj, context: Context): Outcome {
+        val question = args.stringOrNull("question").orEmpty().trim().take(120)
+        return Outcome(
+            name = ServerToolCatalog.THINK,
+            ok = true,
+            summary = "多想了一会儿",
+            contentForModel = "好，这一轮后面的回复可以想得更深一点；想清楚之后用 `send_message` 把话说出来。",
+            deepThinking = true,
+            trace = ToolTrace(
+                name = ServerToolCatalog.THINK,
+                title = "想了想",
+                subtitle = question.ifBlank { null },
+                detail = question,
+                ok = true
+            )
+        )
     }
 
     // ------------------------------------------------------------------ stay_silent / defer_reply
@@ -580,7 +627,9 @@ class ToolExecutor(
             return failure(ServerToolCatalog.SEND_MESSAGE, "text 不能为空", "没写要发什么")
         }
         val clamped = text.take(MAX_SEND_MESSAGE_CHARS)
-        if (!context.outgoing.add(clamped)) {
+        // 0.16：id 先分配、落库时用同一个（工具结果里的 messageId 因此是真的）。
+        val messageId = store.newMessageId()
+        if (!context.outgoing.add(clamped, messageId)) {
             return failure(
                 ServerToolCatalog.SEND_MESSAGE,
                 "这一轮已经发了 $MAX_MESSAGES_PER_TURN 条，别再拆了；剩下的话留到下一轮说",
@@ -588,12 +637,16 @@ class ToolExecutor(
             )
         }
         val index = context.outgoing.all().size
+        val remaining = context.outgoing.remaining()
         return Outcome(
             name = ServerToolCatalog.SEND_MESSAGE,
             ok = true,
             summary = "发出第 $index 条",
-            contentForModel = "已经发出去了（这一轮第 $index 条）。这就是你要说的话本身，不要再用普通文字重复它。",
+            contentForModel = "已发送，messageId=$messageId（这一轮第 $index 条）。" +
+                "这就是你要说的话本身，不要再用普通文字重复它。" +
+                (if (remaining > 0) "这一轮还能再发 $remaining 条。" else "这一轮已经发满 $MAX_MESSAGES_PER_TURN 条。"),
             sentMessage = clamped,
+            sentMessageId = messageId,
             trace = ToolTrace(
                 name = ServerToolCatalog.SEND_MESSAGE,
                 title = "发了消息",

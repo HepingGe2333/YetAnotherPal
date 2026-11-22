@@ -27,6 +27,34 @@ object LlmDefaults {
 
     /** 聊天一次发给模型的历史条数上限（更早的靠事件/分页，不进本轮提示词）。 */
     const val MAX_HISTORY_MESSAGES: Int = 40
+
+    /**
+     * 主 LLM 会话的默认思考强度（0.16，`spec/tool-call-agents/README.md` §2）。
+     *
+     * 0.15 之前服务端从不发 `reasoning_effort`（对支持它的 provider 等于「不指定」）；
+     * 0.16 起**每一条聊天请求**都显式带 `low`，模型调用 `think` 之后同一轮的后续请求升到
+     * [REASONING_EFFORT_HIGH]。只有主聊天会话这样做（情绪判定/进化/主动消息/ASR 这些辅助调用
+     * 走 [LlmClient.stream]/[LlmClient.complete]，不带这一格）。
+     *
+     * 「服务端配置可覆盖默认值」：`--reasoning-effort` / `YAP_LLM_REASONING_EFFORT` 写进
+     * [LlmConfig.reasoningEffort]，此时默认值以配置为准（think 仍然把它升到 high）。
+     */
+    const val DEFAULT_REASONING_EFFORT = "low"
+
+    /** 调用 `think` 之后同一轮后续请求的思考强度。 */
+    const val REASONING_EFFORT_HIGH = "high"
+
+    /** 允许写进请求体的取值（与 OpenAI 兼容 provider 的常见集合一致）。 */
+    val ALLOWED_REASONING_EFFORTS: Set<String> = setOf("low", "medium", "high")
+
+    /** 归一化一个配置值：去空白 + 小写；空串 = 没配（`null`）。不合法时抛 [IllegalArgumentException]。 */
+    fun normalizeReasoningEffort(raw: String?): String? {
+        val value = raw?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
+        require(value in ALLOWED_REASONING_EFFORTS) {
+            "reasoning_effort 只能是 ${ALLOWED_REASONING_EFFORTS.joinToString(" / ")}，收到 $value"
+        }
+        return value
+    }
 }
 
 /**
@@ -47,7 +75,14 @@ data class LlmConfig(
     val source: Source = Source.SERVER,
     val configId: String? = null,
     val temperature: Double = LlmDefaults.TEMPERATURE,
-    val maxTokens: Int = LlmDefaults.MAX_OUTPUT_TOKENS
+    val maxTokens: Int = LlmDefaults.MAX_OUTPUT_TOKENS,
+    /**
+     * 0.16：服务端配置的默认思考强度（`--reasoning-effort` / `YAP_LLM_REASONING_EFFORT`）。
+     *
+     * `null` = 没配，主聊天按 [LlmDefaults.DEFAULT_REASONING_EFFORT]（low）。只有
+     * `LlmReplyGenerator` 会把它带进请求体；辅助调用（情绪/进化/主动消息）不带这一格。
+     */
+    val reasoningEffort: String? = null
 ) {
 
     enum class Source(val wireValue: String) {
@@ -77,6 +112,10 @@ data class LlmConfig(
             temperature = temperature ?: this.temperature,
             maxTokens = maxTokens ?: this.maxTokens
         )
+
+    /** 0.16：带上服务端配置的默认思考强度（`null` = 不改，交给生成器用 low）。 */
+    fun withReasoningEffort(effort: String?): LlmConfig =
+        if (effort == null) this else copy(reasoningEffort = effort)
 }
 
 /**

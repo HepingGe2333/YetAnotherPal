@@ -45,6 +45,7 @@ struct SettingsScreen: View {
                     }
                     appearanceSection
                     apiSection
+                    VoiceTranscriptionSection()
                     ServerModeSection()
                     personaSection
                     SettingsUsageSection()

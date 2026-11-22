@@ -372,7 +372,8 @@ class ToolLoopTest {
             if (counter.getAndIncrement() == 0) {
                 exchange.sse(
                     listOf(
-                        FakeLlmServer.toolCall(0, id = "c1", name = "think", arguments = "{}"),
+                        // 0.16 起 `think` 是注册过的工具，这里换一个真的不存在的名字。
+                        FakeLlmServer.toolCall(0, id = "c1", name = "teleport", arguments = "{}"),
                         FakeLlmServer.DONE
                     )
                 )

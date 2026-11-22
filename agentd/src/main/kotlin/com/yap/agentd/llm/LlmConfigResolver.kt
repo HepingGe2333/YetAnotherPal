@@ -50,11 +50,15 @@ class LlmConfigResolver(
 
     /** 同 [resolve]，但没配置时返回 `null`（主动消息/情绪判定这类后台路径用：安静跳过）。 */
     fun resolveOrNull(): LlmConfig? {
-        if (loopback) {
-            clientConfig()?.let { return it }
-            return serverConfigOrThrow()
-        }
-        return serverConfigOrThrow()
+        val base = if (loopback) {
+            clientConfig() ?: serverConfigOrThrow()
+        } else {
+            serverConfigOrThrow()
+        } ?: return null
+        // 0.16：思考强度的默认值（`--reasoning-effort` / `YAP_LLM_REASONING_EFFORT`）是**服务端**
+        // 配置，所以不管这次用的是客户端推送的配置还是服务端配置，都统一叠在解析结果上。
+        // 只有主聊天会把它带进请求体（见 `LlmReplyGenerator`）；辅助调用不传。
+        return base.withReasoningEffort(reasoningEffortOverride())
     }
 
     /**
@@ -105,6 +109,27 @@ class LlmConfigResolver(
         )
     }
 
+    /**
+     * 0.16：服务端配置的默认思考强度；没配返回 `null`（主聊天用 `low`）。
+     *
+     * 与 LLM 地址/模型不同，这一格**不参与「配置是否可用」的判定**：只写了
+     * `YAP_LLM_REASONING_EFFORT=high` 而没有地址/模型时，仍然算「没有 LLM 配置」。
+     * 取值不合法时明确失败（[LlmErrorKind.INVALID_CONFIG]），而不是静默忽略。
+     */
+    fun reasoningEffortOverride(): String? {
+        val raw = server.reasoningEffort?.trim()?.takeIf { it.isNotEmpty() }
+            ?: env(ENV_LLM_REASONING_EFFORT)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: return null
+        return try {
+            LlmDefaults.normalizeReasoningEffort(raw)
+        } catch (invalid: IllegalArgumentException) {
+            throw LlmException(
+                LlmErrorKind.INVALID_CONFIG,
+                "思考强度配置不合法（--reasoning-effort / $ENV_LLM_REASONING_EFFORT）：${invalid.message}"
+            )
+        }
+    }
+
     private fun notConfiguredMessage(): String = if (loopback) {
         "服务端还没有可用的 LLM 配置：本机部署会优先用客户端推送的 api_configs.json + secrets.json，" +
             "目前一条可用的都没有；也可以给 agentd 加 --llm-base-url / --llm-key / --llm-model。"
@@ -117,6 +142,9 @@ class LlmConfigResolver(
         const val ENV_LLM_BASE_URL = "YAP_LLM_BASE_URL"
         const val ENV_LLM_KEY = "YAP_LLM_KEY"
         const val ENV_LLM_MODEL = "YAP_LLM_MODEL"
+
+        /** 0.16：服务端配置的默认思考强度（`low` / `medium` / `high`）。 */
+        const val ENV_LLM_REASONING_EFFORT = "YAP_LLM_REASONING_EFFORT"
 
         /** 判断「本机部署」：与 `Main` 的监听地址安全提示用同一套回环判定。 */
         fun isLoopbackHost(host: String): Boolean {
@@ -131,5 +159,11 @@ class LlmConfigResolver(
 data class ServerLlmConfig(
     val baseUrl: String? = null,
     val apiKey: String? = null,
-    val model: String? = null
+    val model: String? = null,
+    /**
+     * 0.16：默认思考强度（`--reasoning-effort` / `YAP_LLM_REASONING_EFFORT`）。
+     *
+     * 它不是「配置是否可用」的一部分：只配这一格不算有 LLM。`null` = 用 `low`。
+     */
+    val reasoningEffort: String? = null
 )

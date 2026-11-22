@@ -127,7 +127,10 @@ struct ChatBubbleRow: View {
                 VStack(alignment: .leading, spacing: 6) {
                     if !playableAttachments.isEmpty {
                         ForEach(Array(playableAttachments.enumerated()), id: \.offset) { _, attachment in
-                            ChatPlayableMediaView(attachment: attachment)
+                            ChatPlayableMediaView(
+                                attachment: attachment,
+                                captionColor: contentColor.opacity(0.78)
+                            )
                         }
                     }
                     if !imageAttachments.isEmpty {

@@ -28,7 +28,10 @@ import kotlinx.serialization.json.Json
  * - 新写入的附件**一律显式写 [kind]**（普通图片写 `IMAGE`，不再留 null），[mime] 必须与 kind 同族；
  *   未知 kind / mime 不匹配的附件由 [AttachmentsCodec.encode] 拒绝，不再静默当图片；
  * - [sha256] 记录这份字节的内容哈希（`/v1/media` 下载后由服务端 ETag 校验过的那份），
- *   下次同步命中本地文件时重算比对，本地副本被改坏就删掉重下。旧数据没有这个字段 → 跳过校验。
+ *   下次同步命中本地文件时重算比对，本地副本被改坏就删掉重下。旧数据没有这个字段 → 跳过校验；
+ * - [transcript] / [transcriptState]（0.15 ASR）：语音/视频转写出的文字与「有没有尝试过」。
+ *   两个字段都可空，老 JSON 解出来是 null（= 从没转写过），写回时 `encodeDefaults=false` 也不会
+ *   给老数据平白加字段。规则见 [AsrAttachments]：失败只能是「没有转写」，绝不用空串冒充。
  */
 @Serializable
 data class MessageAttachment(
@@ -40,7 +43,17 @@ data class MessageAttachment(
     val durationMs: Long? = null,
     val serverMediaId: String? = null,
     /** 原始字节的 SHA-256（64 位小写 hex）；0.15 新增，可空 = 旧数据没有哈希。 */
-    val sha256: String? = null
+    val sha256: String? = null,
+    /**
+     * 语音/视频的 ASR 转写文本（0.15）。
+     *
+     * null = 没有转写：可能是 0.15 之前的老数据、开关没开、还没转写，或者转写失败。
+     * 想区分「没试过」与「试过但没转出来」看 [transcriptState]；界面与模型都**不能**把
+     * 没有转写当成「对方什么都没说」，所以失败时这里必须是 null 而不是空串。
+     */
+    val transcript: String? = null,
+    /** 转写尝试的结果：[AsrTranscriptState.OK] / `FAILED` / `SKIPPED`；null = 从没尝试。 */
+    val transcriptState: String? = null
 ) {
     /**
      * 图片类 mime。
@@ -120,7 +133,9 @@ object AttachmentsCodec {
      */
     fun encode(items: List<MessageAttachment>): String? {
         if (items.isEmpty()) return null
-        val normalized = items.mapNotNull { MediaTypes.normalizeForWrite(it) }
+        val normalized = items
+            .mapNotNull { MediaTypes.normalizeForWrite(it) }
+            .map { AsrAttachments.normalize(it) }
         if (normalized.isEmpty()) return null
         return runCatching { json.encodeToString(normalized) }.getOrNull()
     }
@@ -146,11 +161,15 @@ object AttachmentsCodec {
                 val normalizedSha = MediaHashes.normalize(attachment.sha256)
                 // 老数据（kind=null）保持 null：写回时由 encode 补显式 kind，读出来不改写历史形状。
                 val normalizedKind = if (attachment.kind == null) null else descriptor.kind
+                // 0.15 ASR：转写字段宽容读、非法值收敛（图片上的转写直接清掉）。
+                val asrNormalized = AsrAttachments.normalize(attachment)
                 if (normalizedKind == attachment.kind &&
                     descriptor.mime == attachment.mime &&
                     normalizedDuration == attachment.durationMs &&
                     normalizedServerId == attachment.serverMediaId &&
-                    normalizedSha == attachment.sha256
+                    normalizedSha == attachment.sha256 &&
+                    asrNormalized.transcript == attachment.transcript &&
+                    asrNormalized.transcriptState == attachment.transcriptState
                 ) {
                     attachment
                 } else {
@@ -159,7 +178,9 @@ object AttachmentsCodec {
                         mime = descriptor.mime,
                         durationMs = normalizedDuration,
                         serverMediaId = normalizedServerId,
-                        sha256 = normalizedSha
+                        sha256 = normalizedSha,
+                        transcript = asrNormalized.transcript,
+                        transcriptState = asrNormalized.transcriptState
                     )
                 }
             }

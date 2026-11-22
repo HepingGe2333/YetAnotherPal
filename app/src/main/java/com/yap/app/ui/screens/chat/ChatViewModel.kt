@@ -240,6 +240,8 @@ class ChatViewModel @Inject constructor(
      * 同一个会话的 typing 事件不该因为 Activity 重建而丢。
      */
     private val serverTypingState: ServerTypingState,
+    /** 0.15 ASR：发送前把语音/视频转写成文字；关着/没 Key 时零请求直通。 */
+    private val asrTranscriber: com.yap.app.data.repo.AsrTranscriber,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -985,10 +987,14 @@ class ChatViewModel @Inject constructor(
             try {
                 // 审计 P1-1：定位窗口里发送 → 先回到最新一屏，否则自己刚发的那条落在窗口外。
                 leaveJumpWindowForNewMessage()
+                // 0.15 ASR：只对语音/视频调用；失败/未配置不阻断发送，只是没有转写。
+                val enriched = images.map { attachment ->
+                    if (attachment.isAudioOrVideo) asrTranscriber.enrich(attachment) else attachment
+                }
                 // 0.10.2：发送不再等「抽记忆」跑完。抽取是后台任务（读的是历史窗口），
                 // 与「写一条用户消息」没有写冲突；以前在这里 join 会让发送键看起来坏掉
                 // （最长等一次完整模型往返，期间没有任何 loading）。
-                val result = chatRepository.sendUserMessage(sessionId, text, images)
+                val result = chatRepository.sendUserMessage(sessionId, text, enriched)
                 if (result.isFailure) {
                     ephemeral.update {
                         it.copy(snackbar = ErrorText.of(context, result.exceptionOrNull(), R.string.chat_send_failed))
@@ -1032,7 +1038,10 @@ class ChatViewModel @Inject constructor(
                         snackbar = null
                     )
                 }
-                val result = chatRepository.sendServerMessage(sessionId, text, images) { event ->
+                val enriched = images.map { attachment ->
+                    if (attachment.isAudioOrVideo) asrTranscriber.enrich(attachment) else attachment
+                }
+                val result = chatRepository.sendServerMessage(sessionId, text, enriched) { event ->
                     when (event) {
                         // 0.14.1 §8：服务端确认落库不再等于「开始打字」——输入指示只听 typing 事件。
                         is com.yap.app.data.remote.ServerSendEvent.Accepted -> Unit

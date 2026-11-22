@@ -1827,6 +1827,43 @@
     <string name="settings_generation_tools_used">调用了 %1$d 次工具</string>
     <string name="settings_generation_tools_none">没有调用工具</string>
     <string name="settings_generation_failed">这次没跑通：检查一下 API 配置或网络，再试</string>
+    <!-- 0.15 语音/视频转写（ASR）：独立 provider / Key，设置页「语音转写」小节。 -->
+    <string name="settings_section_asr">语音转写</string>
+    <string name="settings_asr_title">语音转写</string>
+    <string name="settings_asr_desc">把语音和视频转成文字交给模型；用独立的 Key，与主对话的模型配置分开。</string>
+    <string name="settings_asr_base_url">Base URL</string>
+    <string name="settings_asr_base_url_hint">https://api.deepseek.com</string>
+    <string name="settings_asr_model">模型</string>
+    <string name="settings_asr_model_hint">whisper-1</string>
+    <string name="settings_asr_key">API Key</string>
+    <string name="settings_asr_key_hint">这个转写服务自己的 Key（留空表示沿用已保存的）</string>
+    <string name="settings_asr_key_masked">已保存：%1$s</string>
+    <string name="settings_asr_clear_key">清除 Key</string>
+    <string name="settings_asr_key_unrecoverable">这台设备上的 Key 已经解不开，请重新填一次</string>
+    <string name="settings_asr_save">保存</string>
+    <string name="settings_asr_saved">已保存</string>
+    <string name="settings_asr_save_failed">保存没成功，再试一次</string>
+    <string name="settings_asr_test">测试</string>
+    <string name="settings_asr_testing">正在转写…</string>
+    <string name="settings_asr_off_hint">关掉之后，语音和视频照常发送，只是模型收不到转写出来的文字。</string>
+    <string name="settings_asr_test_ok">接口可用 · 返回 %1$d 个字</string>
+    <string name="settings_asr_test_ok_empty">接口可用，但没有返回文字（测试音频是一段单音）</string>
+    <string name="settings_asr_test_no_key">还没有填 Key</string>
+    <string name="settings_asr_test_key_unrecoverable">已保存的 Key 解不开，请重新填一次</string>
+    <string name="settings_asr_test_unauthorized">Key 被拒绝（401/403），检查一下</string>
+    <string name="settings_asr_test_rate_limited">请求太频繁（429），过一会儿再试</string>
+    <string name="settings_asr_test_bad_request">请求被拒绝（%1$d），检查模型名或音频格式</string>
+    <string name="settings_asr_test_timeout">超过 60 秒没有响应</string>
+    <string name="settings_asr_test_network">网络不通，或者地址写错了</string>
+    <string name="settings_asr_test_server">服务端出错（%1$d）</string>
+    <string name="settings_asr_test_invalid_url">地址不合法（发布版只支持 https）</string>
+    <string name="settings_asr_test_unparsable">返回内容解析不了</string>
+    <string name="settings_asr_test_too_large">音频太大，超过 %1$d MB</string>
+    <string name="settings_asr_test_response_too_large">返回内容太长</string>
+    <string name="settings_asr_test_unsupported">这个格式不支持转写</string>
+    <string name="settings_asr_test_unreadable">读不到这段音频</string>
+    <string name="settings_asr_test_empty">没有读到音频内容</string>
+    <string name="settings_asr_test_unknown">测试失败，换个地址或 Key 再试</string>
     <!-- 0.15 settings: update channel (GitHub Releases). Manual check is a normal setting row; -->
     <!-- failures and 403 rate limits only ever produce one quiet status line, never an error dialog. -->
     <string name="settings_section_update">更新</string>

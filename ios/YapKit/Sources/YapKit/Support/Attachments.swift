@@ -78,6 +78,23 @@ public struct MessageAttachment: Equatable, Codable, Sendable {
     /// 与 `kind` 同一条兼容规矩：nil 不写进 JSON，老版本读到会当未知字段忽略。
     public var serverMediaId: String?
 
+    /// 这段语音/视频的**语音转写**（ASR，0.15）。nil = 没有转写。
+    ///
+    /// 为什么把它放进附件而不是新开一张表：
+    /// - 转写属于「这句话是怎么来的」，和音频是同一条消息的一部分；
+    /// - `messages.attachmentsJson` 本来就跟着备份走，放进来就自动跨设备；
+    /// - 老版本读到未知字段会忽略（Android `ignoreUnknownKeys = true`），不破坏互通。
+    ///
+    /// 只有**真的转写成功**才写；失败时保持 nil（绝不拿「我听到了…」这种话编一段）。
+    /// 与 `kind` 同一条编码规矩：nil 不写进 JSON，老数据的字节一个都不变。
+    public var transcript: String?
+
+    /// 转写状态（0.15）。只有「试过但没成功」会写进 JSON（`FAILED`），
+    /// 用来在气泡上标一句「没有转写」，而不是把 nil 含糊地当成「没试过」。
+    ///
+    /// 成功时状态由 `transcript` 本身表达，不额外写 `OK`（少一个字段、少一次兼容问题）。
+    public var transcriptState: AsrTranscriptState?
+
     public init(
         uri: String,
         mime: String = MessageAttachment.defaultMime,
@@ -85,7 +102,9 @@ public struct MessageAttachment: Equatable, Codable, Sendable {
         height: Int = 0,
         kind: String? = nil,
         durationMs: Int? = nil,
-        serverMediaId: String? = nil
+        serverMediaId: String? = nil,
+        transcript: String? = nil,
+        transcriptState: AsrTranscriptState? = nil
     ) {
         self.uri = uri
         self.mime = mime
@@ -102,6 +121,16 @@ public struct MessageAttachment: Equatable, Codable, Sendable {
         self.kind = explicit.isEmpty ? nil : (MediaType.parse(explicit)?.rawValue ?? explicit)
         self.durationMs = durationMs
         self.serverMediaId = serverMediaId
+        // 转写：空白一律算「没有」；有文字就没有「失败」这回事（成功状态由文字本身表达）。
+        let spoken = transcript?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.transcript = spoken.isEmpty ? nil : spoken
+        if spoken.isEmpty {
+            // 只会持久化「试过但失败」：`.succeeded` 而没有文字是自相矛盾的输入，
+            // 这里不当成失败标记（宁可什么都不标，也不给用户看一个假的「没有转写」）。
+            self.transcriptState = transcriptState == .failed ? .failed : nil
+        } else {
+            self.transcriptState = .succeeded
+        }
     }
 
     /// 一段语音（AAC 单声道 16 kHz、`.m4a`）。
@@ -183,6 +212,19 @@ public struct MessageAttachment: Equatable, Codable, Sendable {
         return Double(durationMs) / 1000
     }
 
+    /// 有没有真的转写出文字（空白算没有）。
+    public var hasTranscript: Bool {
+        !(transcript ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 「试过转写但没成功」的那条附件：界面上标一句「没有转写」。
+    ///
+    /// 与「还没试过」（nil 且没有状态）刻意分开：只有真的发过请求、失败了的才标记，
+    /// 关着转写的旧消息不会被误标成「没有转写」。
+    public var transcriptIsMissing: Bool {
+        isPlayableMedia && !hasTranscript && transcriptState == .failed
+    }
+
     /// 是不是表情：显式 `kind=STICKER` 优先；没写 kind 时只有 GIF 算表情。
     public var isSticker: Bool {
         switch mediaType {
@@ -194,6 +236,7 @@ public struct MessageAttachment: Equatable, Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case uri, mime, width, height, kind, durationMs, serverMediaId
+        case transcript, transcriptState
     }
 
     /// 手写解码（不用合成实现）：合成实现遇到缺字段会整条失败，
@@ -212,6 +255,14 @@ public struct MessageAttachment: Equatable, Codable, Sendable {
         let rawServerMediaId = try container.decodeIfPresent(String.self, forKey: .serverMediaId)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         serverMediaId = (rawServerMediaId?.isEmpty == false) ? rawServerMediaId : nil
+        transcript = try container.decodeIfPresent(String.self, forKey: .transcript)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // 不认识的状态值一律当「没写」：未来版本多写一个状态，不能让老版本整条附件作废。
+        transcriptState = (try container.decodeIfPresent(String.self, forKey: .transcriptState))
+            .flatMap(AsrTranscriptState.init(stored:))
+        if transcript?.isEmpty == true { transcript = nil }
+        if transcript != nil { transcriptState = .succeeded }
+        if transcript == nil && transcriptState != .failed { transcriptState = nil }
     }
 
     /// 手写编码：与 Android 的 `encodeDefaults = false` 对齐 —— 默认值不写进 JSON。
@@ -227,6 +278,9 @@ public struct MessageAttachment: Equatable, Codable, Sendable {
         if let serverMediaId, !serverMediaId.isEmpty {
             try container.encode(serverMediaId, forKey: .serverMediaId)
         }
+        // 转写：有文字才写；状态只写「失败」（成功由文字本身表达，少一个字段）。
+        if let transcript, !transcript.isEmpty { try container.encode(transcript, forKey: .transcript) }
+        if transcriptState == .failed { try container.encode(transcriptState, forKey: .transcriptState) }
     }
 }
 
@@ -378,9 +432,24 @@ public enum AttachmentsCodec {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             serverMediaId = trimmed.isEmpty ? nil : trimmed
         }
+        // `transcript` / `transcriptState`：0.15 语音转写。
+        // - 文字：类型不对算坏数据（与 uri/mime 同一套语义）；
+        // - 状态：不认识的值当「没写」（未来版本新增状态不该让老版本整段作废）。
+        var transcript: String?
+        if let raw = object["transcript"], !(raw is NSNull) {
+            guard let value = raw as? String else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            transcript = trimmed.isEmpty ? nil : trimmed
+        }
+        var transcriptState: AsrTranscriptState?
+        if let raw = object["transcriptState"], !(raw is NSNull) {
+            guard let value = raw as? String else { return nil }
+            transcriptState = AsrTranscriptState(stored: value)
+        }
         return MessageAttachment(
             uri: uri, mime: mime, width: width, height: height, kind: kind,
-            durationMs: durationMs, serverMediaId: serverMediaId
+            durationMs: durationMs, serverMediaId: serverMediaId,
+            transcript: transcript, transcriptState: transcriptState
         )
     }
 

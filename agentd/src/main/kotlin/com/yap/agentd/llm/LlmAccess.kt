@@ -29,13 +29,15 @@ class LlmAccess(
      * 带工具表的一次生成（工具回路用）：返回文字 + 用量 + 模型想调用的工具。
      *
      * [tools] 是序列化好的 OpenAI tools 数组（见 `tools/ServerToolCatalog.toOpenAiToolsJson`）。
+     * [reasoningEffort] 只有主聊天会传（`low` 默认 / `think` 之后 `high`）；辅助路径不传 = 不发。
      */
     fun chat(
         config: LlmConfig,
         messages: List<LlmMessage>,
         tools: String?,
-        onDelta: (String) -> Unit = {}
-    ): LlmTurn = client.chat(config, messages, tools, onDelta)
+        onDelta: (String) -> Unit = {},
+        reasoningEffort: String? = null
+    ): LlmTurn = client.chat(config, messages, tools, onDelta, reasoningEffort = reasoningEffort)
 
     /**
      * 非流式语义的生成（内部仍走流式客户端，只是收集起来）。

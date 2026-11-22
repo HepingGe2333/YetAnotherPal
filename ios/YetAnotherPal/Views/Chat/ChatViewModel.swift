@@ -840,11 +840,12 @@ final class ChatViewModel: ObservableObject {
         if env.serverModeActive && !attachments.isEmpty {
             isPreparingAttachments = true
             Task { @MainActor in
+                let annotated = await Self.annotateMedia(env: env, attachments)
                 let outcome = await env.sendCheckedWithMedia(
-                    sessionId: sessionId, text: text, attachments: attachments
+                    sessionId: sessionId, text: text, attachments: annotated
                 )
                 isPreparingAttachments = false
-                applySendOutcome(outcome, text: text, attachments: attachments)
+                applySendOutcome(outcome, text: text, attachments: annotated)
             }
             return
         }
@@ -854,6 +855,17 @@ final class ChatViewModel: ObservableObject {
         //
         // 走 `env.sendChecked`：服务端模式走 SSE + 待发队列，本地模式走原链路。
         // 这个判断只出现在装配层一处，这里不重复。
+        if attachments.contains(where: { $0.isAudio || $0.isVideo }) {
+            Task { @MainActor in
+                let annotated = await Self.annotateMedia(env: env, attachments)
+                applySendOutcome(
+                    env.sendChecked(sessionId: sessionId, text: text, attachments: annotated),
+                    text: text,
+                    attachments: annotated
+                )
+            }
+            return
+        }
         applySendOutcome(
             env.sendChecked(sessionId: sessionId, text: text, attachments: attachments),
             text: text,
@@ -1018,14 +1030,33 @@ final class ChatViewModel: ObservableObject {
         case .delta(let text):
             streamingText = text
         case .toolStarted(let item):
+            // 0.16（`spec/tool-call-agents/README.md` §1）：说话不再走正文流式 ——
+            // 流式 token 只做输入指示，气泡要等 `send_message` 完成（`.appended`）才出现。
+            // 工具参数里那句话就是马上要出现的内容，所以先当「即时预览」显示；
+            // 真正的消息落库后由 `.appended` 重读上屏，预览在 `.toolFinished` 时清掉。
+            if item.name == ToolCatalog.sendMessage,
+               let preview = item.subtitle, !preview.isEmpty {
+                streamingText = preview
+            }
             streamingTraces.append(item)
         case .toolFinished(let item):
             // `ChatService` 先发一个只带名字的「开始」，跑完再发完整的一条：
             // 同一个工具只该算一次，否则摘要会变成「联网搜索 2 次」。
-            if let index = streamingTraces.lastIndex(where: { $0.name == item.name && $0.title == item.title }) {
+            //
+            // 0.16：`send_message` 的「开始」只带参数预览（标题是「发消息」），完成时执行器给的
+            // 标题是「发了条消息」——同一个工具，按名字替换，别在气泡下显示两张卡。
+            let index = streamingTraces.lastIndex(where: { trace in
+                if trace.name == item.name && trace.title == item.title { return true }
+                return item.name == ToolCatalog.sendMessage && trace.name == item.name
+            })
+            if let index {
                 streamingTraces[index] = item
             } else {
                 streamingTraces.append(item)
+            }
+            // 这句已经真的发出去了（紧接着会有 `.appended`）：预览不该和真气泡同时出现。
+            if item.name == ToolCatalog.sendMessage {
+                streamingText = ""
             }
         case .done(let completion):
             // 本地模式：落库后的完整消息在 `finishGeneration` 里统一重读，避免两条流各自拼状态。
@@ -1053,6 +1084,8 @@ final class ChatViewModel: ObservableObject {
             // 0.14 连发 / 0.14.1 服务端 `message.created`：这一轮又落了一条独立消息。
             // 服务端模式：逐条即时追加（feed 去重，不整页重读）；本地模式保持原来的重读。
             remoteTyping = false
+            // 0.16：真气泡已经落库（`send_message` 或 legacy 拆条）：流式预览让位给消息列表。
+            streamingText = ""
             if env?.serverModeActive == true {
                 appendServerBubbles([ServerBubbleCandidate(
                     id: message.id,
@@ -1247,5 +1280,15 @@ final class ChatViewModel: ObservableObject {
             Date(timeIntervalSince1970: Double(lhs) / 1000),
             inSameDayAs: Date(timeIntervalSince1970: Double(rhs) / 1000)
         )
+    }
+
+    /// ASR：只对语音/视频附件转写；关着/没 Key/失败都原样返回，不阻断发送。
+    private static func annotateMedia(env: AppEnvironment, _ attachments: [MessageAttachment]) async -> [MessageAttachment] {
+        guard attachments.contains(where: { $0.isAudio || $0.isVideo }) else { return attachments }
+        let transcriber = AsrTranscriber.live(
+            settings: { env.settings.load() },
+            apiKey: { env.apiKeys.asrAPIKey() }
+        )
+        return await transcriber.annotate(attachments)
     }
 }

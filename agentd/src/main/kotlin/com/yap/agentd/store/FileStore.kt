@@ -1176,11 +1176,14 @@ class FileStore(
      * @param promptTokens / completionTokens 那一次生成的用量（重放 `done` 时用）。
      * @param toolTraceJson 这一轮工具回路的痕迹（客户端同形 JSON 文本，可空）。
      * @param blocked 拉黑期间落库的用户消息（永久不进模型上下文）；assistant 消息永远是 false。
+     * @param id 0.16：**预分配**的消息 id（`send_message` 在落库前就把 messageId 回给了模型，
+     *   落库时必须用同一个）；`null` = 由存储自己生成（绝大多数调用方）。
      */
     fun appendMessage(
         sessionId: String,
         role: String,
         content: String,
+        id: String? = null,
         attachments: List<String> = emptyList(),
         source: String = MessageSource.CHAT,
         clientMessageId: String? = null,
@@ -1201,6 +1204,7 @@ class FileStore(
         emitEvent: Boolean = true
     ): Message = lock.withLock {
         if (!MessageRole.isValid(role)) throw IllegalArgumentException("非法的角色：$role")
+        if (id != null && !MESSAGE_ID_PATTERN.matches(id)) throw IllegalArgumentException("非法的消息 id")
         val session = requireSessionLocked(sessionId)
         val blocks = blocksForLocked(sessionId)
         var block = blocks.lastOrNull()
@@ -1218,7 +1222,7 @@ class FileStore(
         }
         val createdAt = nextTimestampLocked()
         val message = Message(
-            id = newId(),
+            id = id ?: newId(),
             sessionId = sessionId,
             blockIndex = block.index,
             role = role,
@@ -4951,6 +4955,15 @@ class FileStore(
     }
 
     private fun newId(): String = UUID.randomUUID().toString()
+
+    /**
+     * 0.16：预分配一个消息 id。
+     *
+     * `send_message` 必须在**落库之前**把 messageId 回给模型（「已发送，messageId=…」），
+     * 所以由存储统一发 id，随后 `appendMessage(..., id = …)` 用同一个。格式与自动生成的完全一致，
+     * 客户端/备份/分页都看不出区别。
+     */
+    fun newMessageId(): String = newId()
 
     private fun deleteRecursively(path: Path) {
         if (!Files.exists(path)) return

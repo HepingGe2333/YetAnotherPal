@@ -26,6 +26,15 @@ import java.time.Clock
  *          → assistant(tool_calls) + tool(结果) 追加进 messages
  * 第 2 轮：再问一次 …… 最多 5 轮（模型/调用方可指定，硬上限 15）
  * ```
+ * 0.16「完全工具调用化」（`spec/tool-call-agents/README.md` §1）：**正文不再是出口**。
+ * 模型每一句给用户看的话都必须调用 `send_message`（工具结果回 `已发送，messageId=…`），
+ * 这里按顺序收集成多条消息交给 `ChatService`；最后一段直接写出来的正文只当「正在输入」，
+ * 只有整轮一次 `send_message` 都没调时才作为 **legacy 兼容回退**（`ReplyOutcome.legacy`）。
+ *
+ * 0.16 思考强度（§2）：主聊天每条请求都带 `reasoning_effort`（服务端配置或默认 `low`）；
+ * 同一轮里模型调用 `think` 之后，后续请求换成 `high`；`generate()` 结束即丢弃状态，
+ * 下一轮回到默认值。辅助调用（情绪/进化/主动消息）不走这里，也不带这一格。
+ *
  * 四条刻意的边界：
  * - **默认 5 轮、上限 15 轮**（0.15，`ExperienceContract.clampToolRounds`）：默认值覆盖
  *   「查一下 → 再确认一下 → 顺手记一笔 → 说话」；模型/调用方可以按任务复杂度要更多，
@@ -101,7 +110,11 @@ class LlmReplyGenerator(
         var textSoFar = StringBuilder()
         // 0.14 连发：`send_message` 每调一次收集一条；`OutgoingMessages` 负责「每轮最多 4 条」。
         val outgoing = ToolExecutor.OutgoingMessages()
-        val sentMessages = ArrayList<String>()
+        // 0.16：每条消息带着提前分配好的 messageId（工具结果已经把它回给了模型）。
+        val sentMessages = ArrayList<ToolExecutor.SentMessage>()
+        // 0.16 思考强度：默认取服务端配置（没配 = low）；`think` 之后同一轮的后续请求升到 high。
+        val baseEffort = config.reasoningEffort ?: LlmDefaults.DEFAULT_REASONING_EFFORT
+        var deepThinking = false
 
         var round = 0
         var sentMultimodal = false
@@ -110,16 +123,19 @@ class LlmReplyGenerator(
             if (clock.millis() > deadline) break
             // 最后一轮不再给 tools：让它只能用已经查到的信息说话，而不是无限查下去。
             val useTools = toolEnabled && round < maxRounds
+            val effort = if (deepThinking) LlmDefaults.REASONING_EFFORT_HIGH else baseEffort
             val turn = try {
                 llm.chat(
                     config = config,
                     messages = messages,
-                    tools = if (useTools) toolsJson else null
-                ) { delta ->
-                    // 逐段下发：客户端拿到的就是模型真实吐出的内容（不是攒完再切块）。
-                    textSoFar.append(delta)
-                    emit(SseEvent.Delta(delta))
-                }
+                    tools = if (useTools) toolsJson else null,
+                    reasoningEffort = effort,
+                    onDelta = { delta ->
+                        // 逐段下发：客户端拿到的就是模型真实吐出的内容（不是攒完再切块）。
+                        textSoFar.append(delta)
+                        emit(SseEvent.Delta(delta))
+                    }
+                )
             } catch (failure: LlmException) {
                 // 0.14.1（`spec/audio-video`）：不支持音频/图片的模型，上游通常回 400。
                 // 这时要给一句明确的话（「这个模型听不了语音」），而不是笼统的「模型接口返回错误」。
@@ -173,7 +189,14 @@ class LlmReplyGenerator(
                     roundTexts += outcome.contentForModel
                 }
                 attachments += outcome.attachments
-                outcome.sentMessage?.let { sentMessages += it }
+                // `send_message` 的正文 + 预先分配的 id（`ChatService` 用同一个 id 落库）。
+                outcome.sentMessage?.let { text ->
+                    sentMessages += ToolExecutor.SentMessage(
+                        text = text,
+                        messageId = outcome.sentMessageId ?: ""
+                    )
+                }
+                if (outcome.deepThinking) deepThinking = true
                 if (outcome.staySilent) {
                     silentThisRound = true
                     silenceRequested = true
@@ -210,7 +233,11 @@ class LlmReplyGenerator(
             elapsedMs = clock.millis() - startedAt,
             textLength = textSoFar.length,
             // 用了 `send_message` 就以逐条消息为准（已流出的文字只当「正在输入」的进度）。
-            messages = if (suppressed) emptyList() else sentMessages.toList(),
+            messages = if (suppressed) emptyList() else sentMessages.map { it.text },
+            // 与 messages 一一对应；落库时用这些 id，工具结果里的 messageId 才是真的。
+            messageIds = if (suppressed) emptyList() else sentMessages.map { it.messageId },
+            // 整轮一次 `send_message` 都没调、却有正文：这是 legacy 兼容回退（旧模型/旧提示词）。
+            legacy = !suppressed && sentMessages.isEmpty() && textSoFar.isNotBlank(),
             silenceRequested = silenceRequested
         )
     }

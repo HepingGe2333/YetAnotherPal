@@ -26,6 +26,7 @@ import com.yap.app.domain.NotificationDeepLink
 import com.yap.app.domain.AttachmentsCodec
 import com.yap.app.domain.AudioVideoKind
 import com.yap.app.domain.AudioVideoText
+import com.yap.app.domain.AgentReplyProtocol
 import com.yap.app.domain.AutoMemory
 import com.yap.app.domain.BlockPolicy
 import com.yap.app.domain.CurrentMedia
@@ -67,6 +68,7 @@ import com.yap.app.domain.DomainErrorCode
 import com.yap.app.domain.NetworkErrorKind
 import com.yap.app.domain.BlockSearch
 import com.yap.app.domain.RankInput
+import com.yap.app.domain.ReasoningEffort
 import com.yap.app.domain.SearchFilter
 import com.yap.app.domain.SearchRanking
 import com.yap.app.domain.SearchSnippet
@@ -911,6 +913,11 @@ class ChatRepository @Inject constructor(
             var crisisForcedReply = false
             // 0.15：这一轮模型有没有自己调用 `remember`（调用过就不再自动补记忆）。
             var rememberCalled = false
+            // 0.16 思考强度（`spec/tool-call-agents/README.md` §2）：默认 low；
+            // 这一轮调用过 `think` 之后，后续请求升到 high（think 结果回灌后才值得多想）。
+            // 变量每轮 generateAssistant 重新初始化，所以「结束后恢复 low」是自然结果，不需要收尾复位。
+            var reasoningEffort = ReasoningEffort.DEFAULT
+            var thinkCalledThisTurn = false
             while (true) {
                 val buffer = StringBuilder()
                 adapter.streamChat(
@@ -918,7 +925,7 @@ class ChatRepository @Inject constructor(
                     apiKey = resolved.apiKey,
                     model = session.model.ifBlank { config.model },
                     messages = conversation,
-                    params = config.inferenceParams(),
+                    params = config.inferenceParams(reasoningEffort = reasoningEffort),
                     kind = com.yap.app.domain.UsageKind.CHAT,
                     lane = LlmLane.CHAT,
                     sessionId = sessionId,
@@ -927,24 +934,10 @@ class ChatRepository @Inject constructor(
                     when (event) {
                         is StreamEvent.Text -> {
                             buffer.append(event.value)
-                            // 只把「还没写到的工具块」之前的部分推到界面，协议块永不示人。
-                            val visible = ToolProtocol.visiblePrefix(buffer.toString())
-                            if (visible != shownText) {
-                                // 首字到达前先「打一会儿字」：字数只能用这一刻已经到达的字数估。
-                                // 延迟期间界面已经显示输入指示；失败/停止不会走到这里。
-                                if (!typingDelayApplied && visible.isNotBlank()) {
-                                    typingDelayApplied = true
-                                    kotlinx.coroutines.delay(
-                                        ExperienceRhythm.typingDelayMillis(
-                                            charCount = visible.length,
-                                            arousal = moodForTiming?.arousal,
-                                            lowEnergy = lowEnergy
-                                        )
-                                    )
-                                }
-                                shownText = visible
-                                emit(GenerationEvent.Delta(visible))
-                            }
+                            // 0.16 完全工具调用化：流式 token **只**当「正在输入」的输入指示，
+                            // 不再把模型正文当气泡预览——用户看到的每一条消息都来自
+                            // `send_message` 落库后的 GenerationEvent.MessageSent。
+                            // （到这里为止界面只显示 TypingRow；协议块与正文都不会先露出来。）
                         }
                         StreamEvent.Done -> Unit
                     }
@@ -1006,19 +999,20 @@ class ChatRepository @Inject constructor(
                     }
                     // 模型自己调用过 remember：这一轮的高置信自动记忆不再重复写。
                     if (call.name.trim().equals(ToolCatalog.REMEMBER, ignoreCase = true)) rememberCalled = true
-                    // 0.14 连发：聊天层直接落库，不交给通用工具执行器（它没有「发消息」的写路径）。
+                    // 0.16：`send_message` 是**唯一**的对外消息通道（`spec/tool-call-agents/README.md` §1）。
+                    // 聊天层直接落库，不交给通用工具执行器（它没有「发消息」的写路径）。
                     if (call.name.trim().equals(ToolCatalog.SEND_MESSAGE, ignoreCase = true)) {
                         val text = ExperienceRhythm.clampSendText(call.argument("text").orEmpty())
-                        val tooMany = messagesThisRound >= ExperienceRhythm.MAX_MESSAGES_PER_ROUND
+                        val tooMany = messagesThisRound >= AgentReplyProtocol.MAX_PER_ROUND
                         if (text.isBlank() || tooMany) {
                             results += ToolResult(
                                 invocation = call,
                                 ok = false,
-                                summary = if (tooMany) "本轮已经发了 ${ExperienceRhythm.MAX_MESSAGES_PER_ROUND} 条" else "消息是空的",
+                                summary = if (tooMany) "本轮已经发了 ${AgentReplyProtocol.MAX_PER_ROUND} 条" else "消息是空的",
                                 contentForModel = if (tooMany) {
-                                    "这一轮已经发满 ${ExperienceRhythm.MAX_MESSAGES_PER_ROUND} 条了，别再发；把剩下的话并进正文。"
+                                    AgentReplyProtocol.tooManyResult()
                                 } else {
-                                    "这条消息是空的，没有发出去。写一句完整的话再试。"
+                                    AgentReplyProtocol.blankResult()
                                 }
                             )
                             continue
@@ -1052,6 +1046,9 @@ class ChatRepository @Inject constructor(
                             model = session.model.ifBlank { config.model },
                             toolAttachments = emptyList(),
                             toolTraceJson = null,
+                            // 新路径标记：这条消息是 send_message 发出去的。它同时让
+                            // 「历史里有没有旧版本直接说的消息」可以在下一轮判定（见 buildContext）。
+                            replyChannel = ToolTraceCodec.CHANNEL_TOOL,
                             generation = generation
                         )
                         if (saved == null) {
@@ -1067,8 +1064,11 @@ class ChatRepository @Inject constructor(
                             invocation = call,
                             ok = true,
                             summary = "已发出第 ${sentMessages.size} 条",
-                            contentForModel = "已经作为第 ${sentMessages.size} 条消息发出去了（对方能看见）。" +
-                                "不要重复这句；还有话说可以再发一条，或直接把最后一句写成正文。"
+                            // 规范 §1：工具结果要回灌「已发送，messageId=…」，模型据此继续决定。
+                            contentForModel = AgentReplyProtocol.sentResult(
+                                index = sentMessages.size,
+                                messageId = saved.id
+                            )
                         )
                         continue
                     }
@@ -1098,6 +1098,12 @@ class ChatRepository @Inject constructor(
                         if (call.name.trim().equals(ToolCatalog.DEFER_REPLY, ignoreCase = true)) deferred = true
                         if (call.name.trim().equals(ToolCatalog.STAY_SILENT, ignoreCase = true) && execution.result.ok) {
                             silenced = true
+                        }
+                        // 0.16 思考强度（规范 §2）：think 的结果回灌之后，**这一轮后续请求**升到 high；
+                        // 失败/被拦下的 think 不升（没真的想，不值得多花）。
+                        if (call.name.trim().equals(ToolCatalog.THINK, ignoreCase = true) && execution.result.ok) {
+                            thinkCalledThisTurn = true
+                            reasoningEffort = ReasoningEffort.forRequest(thinkCalledThisTurn)
                         }
                         results += execution.result
                     }
@@ -1146,7 +1152,12 @@ class ChatRepository @Inject constructor(
                             append('\n')
                             append(toolCaptions.joinToString("\n"))
                         }
-                        append("\n\n（以上是你自己刚做完的事，对方看不见细节。现在接着把话说完，别重复，也别提工具。）")
+                        // 0.16：不要再让模型「把话说完」——说完意味着写正文。
+                        // 要说的话仍然只能通过 send_message；不想说就结束这一轮。
+                        append(
+                            "\n\n（以上是你自己刚做完的事，对方看不见细节。要说话就继续调用 send_message，" +
+                                "别重复已经发过的；不想说或说完了就结束这一轮，不要再输出正文。）"
+                        )
                     },
                     images = toolImages,
                     audios = toolAudios
@@ -1217,23 +1228,26 @@ class ChatRepository @Inject constructor(
             if (crisisTurn && sentMessages.isEmpty()) {
                 replyText = CrisisPriority.replyBody(crisisTurn, replyText, crisisNote)
             }
-            // 0.14：不带工具的回复按空行拆成 1–3 条，逐条落库（规范 §4）。
-            // 已经用 send_message 发过时，正文最多再补 1 条；4 条是这一轮的硬上限。
-            val remainingSlots = (ExperienceRhythm.MAX_MESSAGES_PER_ROUND - sentMessages.size).coerceAtLeast(0)
-            val chunkLimit = if (sentMessages.isNotEmpty()) {
-                remainingSlots.coerceAtMost(1)
-            } else {
-                minOf(ExperienceRhythm.MAX_SPLIT_MESSAGES, remainingSlots)
-            }
-            val chunks = ExperienceRhythm.splitPlainReply(replyText).let { raw ->
-                if (raw.size <= chunkLimit) raw else raw.take(chunkLimit)
-            }
+            // 0.16 兼容回退（`spec/tool-call-agents/README.md` §1）：正文不再是正常通道。
+            // 旧版本 / 不守规矩的模型仍然会直接写出正文，这时整段落成**一条** legacy 消息，
+            // 并在 toolTrace 里标上 `legacy`（界面不显示，迁移判定与日志用它）。
+            // 已经用 send_message 发过时，剩下的正文并进最后一条，绝不造第 5 个气泡。
             val pendingAttachments = toolAttachments.take(MAX_IMAGES_PER_MESSAGE)
-            if (chunkLimit == 0 && replyText.isNotBlank() && lastSaved != null) {
-                // 已经发满 4 条：正文并进最后一条，不再造第 5 个气泡（规范 §4 的硬上限）。
+            // 拆条函数仍然过一遍：回退路径保留「空行分段」的旧排版，只是合并成一条，不再拆成多个气泡。
+            // （`ExperienceRhythm.splitPlainReply` 仍是唯一实现，测试与老路径都指向它。）
+            val legacyText = ExperienceRhythm.splitPlainReply(replyText).joinToString("\n\n")
+            // 只发了一张表情、没写正文是合法的一轮（「点选即发送」另一种形态）：
+            // 有附件就不算空流，否则会把刚发出去的表情一起丢掉。
+            if (legacyText.isBlank() && proposal == null && toolAttachments.isEmpty() && sentMessages.isEmpty()) {
+                throw ApiException(NetworkErrorKind.EmptyStream)
+            }
+            // 协议违规的判定先做完，才决定要不要走兼容回退。
+            val legacyFallback = AgentReplyProtocol.isLegacyFallback(sentMessages.size)
+            if (legacyText.isNotBlank() && !legacyFallback) {
+                // 已经发过消息：任何剩余正文并进最后一条（安全提示也走这里），不下发第 5 个气泡。
                 val previous = sentMessages.last()
                 val merged = previous.copy(
-                    content = (previous.content + "\n\n" + replyText.trim()).trim(),
+                    content = (previous.content + "\n\n" + legacyText.trim()).trim(),
                     updatedAt = nextTimestamp(sessionId)
                 )
                 runCatching {
@@ -1243,43 +1257,31 @@ class ChatRepository @Inject constructor(
                     refreshPreview(session)
                 }
             }
-            // 只发了一张表情、没写正文是合法的一轮（「点选即发送」另一种形态）：
-            // 有附件就不算空流，否则会把刚发出去的表情一起丢掉。
-            if (chunks.isEmpty() && proposal == null && toolAttachments.isEmpty() && sentMessages.isEmpty()) {
-                throw ApiException(NetworkErrorKind.EmptyStream)
-            }
-            chunks.forEachIndexed { index, chunk ->
-                val isFirst = sentMessages.isEmpty()
+            if (legacyText.isNotBlank() && legacyFallback) {
+                // 兼容回退：模型没有走工具，正文直接落一条 legacy 消息（规范 §1 的回退条款）。
                 if (!typingDelayApplied) {
                     typingDelayApplied = true
                     kotlinx.coroutines.delay(
                         ExperienceRhythm.typingDelayMillis(
-                            charCount = chunk.length,
-                            arousal = moodForTiming?.arousal,
-                            lowEnergy = lowEnergy
-                        )
-                    )
-                } else if (!isFirst) {
-                    // 连发之间：先收起暂存气泡，让「正在输入」显示出来，再停 0.8–2.5 秒。
-                    shownText = ""
-                    emit(GenerationEvent.Delta(""))
-                    kotlinx.coroutines.delay(
-                        ExperienceRhythm.sendGapMillis(
-                            charCount = chunk.length,
+                            charCount = legacyText.length,
                             arousal = moodForTiming?.arousal,
                             lowEnergy = lowEnergy
                         )
                     )
                 }
-                val attachments = if (index == chunks.lastIndex) pendingAttachments else emptyList()
-                val traceJson = if (index == chunks.lastIndex) ToolTraceCodec.encode(traces) else null
+                // 日志里留一笔：这条回复没走 send_message。它不代表新提示词路径成功。
+                android.util.Log.i(
+                    "ChatRepository",
+                    AgentReplyProtocol.legacyLogLine(sentMessages.size, legacyText.length)
+                )
                 val saved = saveAssistantMessage(
                     sessionId = sessionId,
                     personaId = persona.id,
-                    content = chunk,
+                    content = legacyText.trim(),
                     model = session.model.ifBlank { config.model },
-                    toolAttachments = attachments,
-                    toolTraceJson = traceJson,
+                    toolAttachments = pendingAttachments,
+                    toolTraceJson = ToolTraceCodec.encode(traces),
+                    replyChannel = ToolTraceCodec.CHANNEL_LEGACY,
                     generation = generation
                 )
                 if (saved == null) {
@@ -1294,7 +1296,7 @@ class ChatRepository @Inject constructor(
                 emit(GenerationEvent.MessageSent(saved))
                 shownText = ""
             }
-            if (chunks.isEmpty() && pendingAttachments.isNotEmpty()) {
+            if (legacyText.isBlank() && pendingAttachments.isNotEmpty()) {
                 // 只有表情/附件、没有正文：仍然是一条完整的助手消息，不能当空流丢掉。
                 if (!typingDelayApplied) {
                     typingDelayApplied = true
@@ -1324,6 +1326,8 @@ class ChatRepository @Inject constructor(
                     model = session.model.ifBlank { config.model },
                     toolAttachments = pendingAttachments,
                     toolTraceJson = ToolTraceCodec.encode(traces),
+                    // 附件消息来自工具（表情/媒体），不是「直接说的正文」；标 status 以免被当成旧话。
+                    replyChannel = ToolTraceCodec.CHANNEL_STATUS,
                     generation = generation
                 ) ?: run {
                     completed = true
@@ -1414,6 +1418,11 @@ class ChatRepository @Inject constructor(
      *
      * 与旧的「最后一并写」不同：每条消息独立成行、独立时间戳，块维护统一走
      * [MessageBlockWriter]；会话预览/未读也按最后一条更新。
+     *
+     * @param replyChannel 0.16：这条消息的「回复通道」（[ToolTraceCodec.CHANNEL_TOOL] /
+     *        [ToolTraceCodec.CHANNEL_LEGACY] / [ToolTraceCodec.CHANNEL_STATUS]）。
+     *        它会作为一条不可见的标记并进 `toolTraceJson`，让下一轮能判定「历史里有没有
+     *        旧版本直接说的消息」；空串表示这条写入不带标记（保留给内部调用）。
      */
     private suspend fun saveAssistantMessage(
         sessionId: String,
@@ -1422,7 +1431,8 @@ class ChatRepository @Inject constructor(
         model: String,
         toolAttachments: List<MessageAttachment>,
         toolTraceJson: String?,
-        generation: Long
+        generation: Long,
+        replyChannel: String = ""
     ): MessageEntity? = withContext(NonCancellable) {
         if (!writeStillValid(sessionId, generation)) return@withContext null
         val now = nextTimestamp(sessionId)
@@ -1439,7 +1449,7 @@ class ChatRepository @Inject constructor(
             model = model,
             edited = false,
             attachmentsJson = AttachmentsCodec.encode(toolAttachments),
-            toolTraceJson = toolTraceJson
+            toolTraceJson = ToolTraceCodec.withChannel(toolTraceJson, replyChannel)
         )
         database.withTransaction {
             blockWriter.append(assistant)
@@ -1561,7 +1571,9 @@ class ChatRepository @Inject constructor(
             errorMessage = null,
             model = model,
             edited = false,
-            toolTraceJson = toolTraceJson
+            // 0.16：失败/中断是状态消息，不是「旧版本直接说的正文」——
+            // 标 status 免得下一轮把它们当成迁移提示的依据。
+            toolTraceJson = ToolTraceCodec.withChannel(toolTraceJson, ToolTraceCodec.CHANNEL_STATUS)
         )
         database.withTransaction {
             blockWriter.append(message)
@@ -1605,7 +1617,8 @@ class ChatRepository @Inject constructor(
             errorMessage = errorText,
             model = model,
             edited = false,
-            toolTraceJson = toolTraceJson
+            // 0.16：错误气泡同样是状态消息（不是回退正文），标 status 以免污染迁移判定。
+            toolTraceJson = ToolTraceCodec.withChannel(toolTraceJson, ToolTraceCodec.CHANNEL_STATUS)
         )
         database.withTransaction {
             blockWriter.append(message)
@@ -2305,6 +2318,12 @@ class ChatRepository @Inject constructor(
         }.getOrDefault("")
         // 0.15：提示词语言由**人格自己**决定（与界面语言无关）。
         val personaLanguage = PromptLanguage.resolve(persona.languageTag)
+        // 0.16 迁移兼容（`spec/tool-call-agents/README.md` §3）：上下文里还有「旧版本直接说的」
+        // assistant 消息时补一句提醒。旧消息原样保留、不补造任何工具痕迹——只提醒它「从现在起必须走工具」。
+        val legacyContext = ToolTraceCodec.hasLegacyReply(
+            visible.filter { it.role == MessageRole.ASSISTANT }.map { it.toolTraceJson }
+        )
+        val migrationNote = AgentReplyProtocol.migrationNote(legacyContext, personaLanguage)
         val promptInputs = PromptBuilder.Inputs(
             name = persona.name,
             age = card.identity.age,
@@ -2356,6 +2375,8 @@ class ChatRepository @Inject constructor(
                 language = PromptBuilder.languageBlock(promptInputs),
                 boundaries = PromptBuilder.boundaries(personaLanguage),
                 extras = listOfNotNull(
+                    // 0.16 迁移提示：只在历史里真有旧版本直出的消息时出现（否则一个字都不多）。
+                    migrationNote,
                     // 长期记忆库（他不是摘要，检索出来的是「他记得的具体事」）。
                     memoryRepository.formatForPrompt(memories).takeIf { memories.isNotEmpty() },
                     // 这一轮带语音/视频：给模型 mediaId 与类型，它才知道可以 listen/watch。

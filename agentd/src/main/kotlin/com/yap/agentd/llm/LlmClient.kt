@@ -19,13 +19,14 @@ import java.time.Duration
  * 只做三件事：
  * 1. **拼请求**：`model` / `messages` / `stream=true` / `stream_options.include_usage` /
  *    `temperature=0.75` / `max_tokens=16384`（默认值来自 [LlmDefaults]，可被 [LlmConfig] 覆盖）；
+ *    0.16 起主聊天还带 `reasoning_effort`（默认 `low`，`think` 之后同一轮升到 `high`）；
  * 2. **解析 SSE**：按行读 `data:`，把 `choices[0].delta.content`（也认 `text` / `message.content`）
  *    交给 `onDelta`，`[DONE]` 结束；usage 出现在最后一条（`choices` 为空）分片里时照样收下；
  * 3. **分类失败**：见 [LlmErrorKind]。任何文案都不含 key；上游响应体只截 300 字且只进 [LlmException.detail]。
  *
  * 刻意**不做**的两件事（都写在 README 的「没做到/风险」里）：
  * - 不在客户端断开时取消（契约 §3.3 要求服务端继续生成并落库）；
- * - 不做工具回路（模型只输出文字；`web_search` 等工具的循环是下一步）。
+ * - 不替模型决定思考强度：`reasoning_effort` 由调用方给（`LlmReplyGenerator` 按 `think` 切换）。
  */
 class LlmClient(
     private val httpClient: HttpClient = defaultHttpClient(),
@@ -48,15 +49,23 @@ class LlmClient(
      * `tools` 是**已经序列化好的 OpenAI tools 数组**（`[{"type":"function",…}]`）：
      * 传字符串而不是模型，是为了让工具表只有一处真源（`tools/ServerToolCatalog`），
      * 而这一层不需要认识任何一个工具名。
+     *
+     * [reasoningEffort] 是 0.16 的思考强度（`low` / `medium` / `high`）：非空才写进请求体
+     * `reasoning_effort`，`null` = 不指定（辅助调用保持 0.15 的行为）。主聊天由
+     * `LlmReplyGenerator` 传 `low`，模型调用 `think` 之后同一轮的后续请求传 `high`。
+     * 不认识的取值**明确失败**（[LlmErrorKind.INVALID_CONFIG]），而不是悄悄发一个 provider
+     * 会忽略的字符串——否则「为什么思考和以前一样」会变成查不出来的悬案。
      */
     fun chat(
         config: LlmConfig,
         messages: List<LlmMessage>,
         tools: String?,
-        onDelta: (String) -> Unit
+        onDelta: (String) -> Unit,
+        reasoningEffort: String? = null
     ): LlmTurn {
         if (messages.isEmpty()) throw LlmException(LlmErrorKind.INVALID_CONFIG, "没有可发送的消息")
-        val request = buildRequest(config, messages, stream = true, tools = tools)
+        val effort = normalizeEffort(reasoningEffort)
+        val request = buildRequest(config, messages, stream = true, tools = tools, reasoningEffort = effort)
         val response = send(config, request)
         val body = response.body()
         try {
@@ -103,7 +112,8 @@ class LlmClient(
         config: LlmConfig,
         messages: List<LlmMessage>,
         stream: Boolean,
-        tools: String? = null
+        tools: String? = null,
+        reasoningEffort: String? = null
     ): HttpRequest {
         val uri = try {
             URI.create(config.endpoint())
@@ -116,7 +126,7 @@ class LlmClient(
         if (uri.scheme != "http" && uri.scheme != "https") {
             throw LlmException(LlmErrorKind.INVALID_CONFIG, "LLM 地址必须是 http:// 或 https://")
         }
-        val payload = buildPayload(config, messages, stream, tools)
+        val payload = buildPayload(config, messages, stream, tools, reasoningEffort)
         val builder = HttpRequest.newBuilder(uri)
             .timeout(requestTimeout)
             .header("Content-Type", "application/json")
@@ -382,6 +392,13 @@ class LlmClient(
 
     // ------------------------------------------------------------------ 小工具
 
+    /** 思考强度归一化；不合法取值明确失败（见 [chat]）。 */
+    private fun normalizeEffort(raw: String?): String? = try {
+        LlmDefaults.normalizeReasoningEffort(raw)
+    } catch (invalid: IllegalArgumentException) {
+        throw LlmException(LlmErrorKind.INVALID_CONFIG, invalid.message ?: "reasoning_effort 不合法")
+    }
+
     private fun string(value: JsonValue?): String? = (value as? JsonValue.Str)?.value
 
     /** 读一行，超过 [MAX_LINE_CHARS] 直接失败（不让异常上游吃内存）。 */
@@ -412,7 +429,8 @@ class LlmClient(
         config: LlmConfig,
         messages: List<LlmMessage>,
         stream: Boolean,
-        tools: String? = null
+        tools: String? = null,
+        reasoningEffort: String? = null
     ): String {
         val messageArray = messages.mapTo(mutableListOf<JsonValue>()) { message ->
             val fields = linkedMapOf<String, JsonValue>(
@@ -448,6 +466,10 @@ class LlmClient(
             "temperature" to JsonValue.Num(config.temperature.toString()),
             "max_tokens" to JsonValue.Num(config.maxTokens.toString())
         )
+        // 0.16：思考强度只在**主聊天**请求里出现（辅助调用传 null = 不发这一格）。
+        if (!reasoningEffort.isNullOrBlank()) {
+            fields["reasoning_effort"] = JsonValue.Str(reasoningEffort)
+        }
         if (stream) {
             // 让服务端在最后一个分片里带上 usage；不支持的网关会忽略这个字段。
             fields["stream_options"] = JsonValue.Obj(

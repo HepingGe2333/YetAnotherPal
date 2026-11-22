@@ -75,6 +75,11 @@ public enum ChatNoReplyReason: Equatable, Sendable {
 public enum ChatEvent: Equatable, Sendable {
     /// 当前**可见**的正文全文（不含协议块）。与 Android 的 `GenerationEvent.Delta` 同义：
     /// 传全文而不是增量，界面直接覆盖最后一条气泡，避免增量拼错。
+    ///
+    /// 0.16（`spec/tool-call-agents/README.md` §1）：新协议下模型不再直接输出正文，
+    /// 所以这条事件多数时候是**空串**，只用来表示「他还在输入」；
+    /// 真正的气泡由 `send_message` 落库后的 `.appended` 产生。
+    /// 只有兼容回退（老模型 / 老提示词）时它才会带着正文出现。
     case delta(String)
     /// 他开始用一个工具（界面可以在这里显示「正在联网搜索…」）。
     case toolStarted(ToolTraceItem)
@@ -87,6 +92,8 @@ public enum ChatEvent: Equatable, Sendable {
     /// 0.14 连发：这一轮又落了一条**独立**的助手消息（`send_message` / 空行拆分）。
     ///
     /// 界面收到就立刻重读消息列表：多条气泡要逐条出现，而不是等这一轮结束一起冒出来。
+    ///
+    /// 0.16：`send_message` 完成（落库）后走的就是这条事件 —— 气泡在工具完成之后才出现。
     case appended(MessageEntity)
 }
 
@@ -879,21 +886,37 @@ public final class ChatService {
                 practicalChars: PromptBuilder.contextCharBudget,
                 language: personaLanguage
             ))
-            var conversation = [WireMessage(role: "system", content: assembled.system)] + assembled.history
+            // 0.16 迁移兼容（`spec/tool-call-agents/README.md` §3）：上下文里还有旧版本直接说的
+            // assistant 消息（没有 `toolTraceJson`）时，在 system 末尾补一句「那是旧版本说的，
+            // 不代表你现在可以跳过工具」。旧消息本身**一个字都不改**（不补造痕迹）。
+            var systemPrompt = assembled.system
+            let legacyCount = OutboundProtocol.legacyAssistantMessageCount(recent)
+            if legacyCount > 0 {
+                systemPrompt += "\n\n" + OutboundProtocol.migrationNote(language: personaLanguage)
+                log?("[chat] 迁移提示：上下文里有 \(legacyCount) 条旧版本直接说的消息，已补一句历史说明")
+            }
+            var conversation = [WireMessage(role: "system", content: systemPrompt)] + assembled.history
             var round = 0
             // 模型可以在 `think` 里说明这轮要几步工具；没说明就按默认 5，硬上限 15。
             var toolRoundLimit = ExperienceContract.shared.clampToolRounds(requested: nil)
             var executed = Set<String>()
             var finalBody = ""
+            // 0.16 思考强度（`spec/tool-call-agents/README.md` §2）：这一轮默认 low；
+            // 模型调用 `think` 之后，这一轮的**后续请求**升到 high。
+            // 变量在 `runGeneration` 里，所以下一轮（下一次生成）自然回到 low。
+            var effort = ReasoningEffort.defaultEffort
 
             while true {
                 var buffer = ""
+                // 只有主 LLM 会话设置思考强度：辅助调用（危机判定、记忆抽取……）不经过这里。
+                var requestParams = config.inferenceParams()
+                requestParams.reasoningEffort = effort
                 let stream = client.streamChat(
                     config: config,
                     apiKey: resolved.apiKey,
                     model: model,
                     messages: conversation,
-                    params: config.inferenceParams(),
+                    params: requestParams,
                     extraHeaders: [:],
                     kind: UsageKind.chat,
                     usageContext: UsageContext(personaId: persona.id, sessionId: sessionId)
@@ -1129,6 +1152,12 @@ public final class ChatService {
                     toolRoundLimit = Self.toolRoundLimit(
                         requested: thinkCall.intArgument("rounds", default: 0)
                     )
+                    // 0.16 思考强度（`spec/tool-call-agents/README.md` §2）：模型按了 `think`，
+                    // 这一轮**后续请求**就升到 high（想清楚再开口，而不是每句话都多花钱）。
+                    if effort != ReasoningEffort.afterThink {
+                        effort = ReasoningEffort.afterThink
+                        log?("[chat] 用了 think：这一轮后续请求 reasoning_effort=high")
+                    }
                 }
                 var results: [ToolResult] = []
                 for call in calls {
@@ -1161,7 +1190,21 @@ public final class ChatService {
                         continue
                     }
                     executed.insert(fingerprint)
-                    let result = await tools.run(
+                    // 0.16（`spec/tool-call-agents/README.md` §1）：「流式 token 只做输入指示，
+                    // 气泡在 `send_message` 完成后出现（**可参数预览**）」。
+                    // 参数里的 `text` 就是马上要出现的那一句，所以先把它交给界面当预览；
+                    // 真正的消息仍然等工具跑完、由 `deliverOutbound` 落库后推 `.appended`。
+                    if call.name.trimmingCharacters(in: .whitespacesAndNewlines) == ToolCatalog.sendMessage,
+                       let preview = MessageRhythm.cleanSendText(call.argument("text")) {
+                        continuation.yield(.toolStarted(ToolTraceItem(
+                            name: ToolCatalog.sendMessage,
+                            title: ToolProtocol.title(forTool: ToolCatalog.sendMessage),
+                            subtitle: preview,
+                            detail: "",
+                            ok: true
+                        )))
+                    }
+                    var result = await tools.run(
                         call, persona: persona, sessionId: sessionId,
                         userMessageId: currentUserMessage?.id
                     )
@@ -1179,6 +1222,11 @@ public final class ChatService {
                        ) {
                         sentCount += 1
                         producedMessage = delivered
+                        // 0.16（§1）：工具结果回灌 `messageId`，模型据此知道这句真的发出去了、
+                        // 可以接着发下一句（或者结束这一轮）。
+                        result.contentForModel = OutboundProtocol.sentReceipt(messageId: delivered.id)
+                        // 痕迹的展开正文用**发出去的那句话**，不把内部 id 露给用户。
+                        result.traceDetail = outbound
                     }
                     if let producedId = result.producedMessageId,
                        let produced = (try? stores.messages.byId(producedId)) ?? nil {
@@ -1186,9 +1234,14 @@ public final class ChatService {
                     }
                     let trace = ToolTraceItem.from(result)
                     traces.append(trace)
-                    continuation.yield(.toolStarted(ToolTraceItem(
-                        name: trace.name, title: trace.title, subtitle: nil, detail: "", ok: true
-                    )))
+                    // `send_message` 的「开始」已经带着参数预览发过了（同 name+title，
+                    // 界面按这两项去重/替换），这里不再重复发一条空的开始事件。
+                    if result.invocation.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                        != ToolCatalog.sendMessage {
+                        continuation.yield(.toolStarted(ToolTraceItem(
+                            name: trace.name, title: trace.title, subtitle: nil, detail: "", ok: true
+                        )))
+                    }
                     continuation.yield(.toolFinished(trace))
                     results.append(result)
                 }
@@ -1304,6 +1357,16 @@ public final class ChatService {
             if finalText != shownText {
                 shownText = finalText
                 continuation.yield(.delta(finalText))
+            }
+
+            // 0.16 兼容回退（`spec/tool-call-agents/README.md` §1）：模型这一轮**没有**调用
+            // `send_message`（也没有用表情之类的工具替他说话），却写了正文。
+            //
+            // 这条正文不是新路径 —— 客户端仍然把它当成一句话落库（老模型 / 老提示词还会这么说话，
+            // 聊天不能因此变哑），但必须在日志里留下标记，否则「还有多少轮在走旧协议」永远看不出来。
+            if sentCount == 0, producedMessage == nil {
+                log?("[chat] \(OutboundProtocol.legacyFallbackLogTag)：这一轮没有 send_message，"
+                    + "最终正文按旧协议落库（\(finalText.count) 字）")
             }
 
             // 0.14 §4：不走工具的回复按空行拆成 1–3 条（用了 `send_message` 时，正文也算一条，
@@ -1584,7 +1647,10 @@ public final class ChatService {
             status: .complete,
             errorMessage: nil,
             model: model,
-            traces: []
+            traces: [],
+            // 0.16：这句话是新协议发出去的 → 在 `toolTraceJson` 里留一个空数组标记，
+            // 免得下次读历史时被当成「旧版本直接说的」（见 `OutboundProtocol.toolProtocolTraceMarker`）。
+            toolProtocol: true
         ) else { return nil }
         continuation.yield(.appended(saved))
         return saved
@@ -1706,6 +1772,9 @@ public final class ChatService {
 
     // MARK: - 落库
 
+    /// - Parameter toolProtocol: 这条消息是不是**新协议**（`send_message`）发出去的。
+    ///   是的话即使没有工具痕迹也写一个 `[]` 标记（见 `OutboundProtocol.toolProtocolTraceMarker`），
+    ///   这样「`toolTraceJson == nil`」就只剩一个含义：旧版本直接说的。
     @discardableResult
     private func saveAssistant(
         sessionId: String,
@@ -1714,7 +1783,8 @@ public final class ChatService {
         status: MessageStatus,
         errorMessage: String?,
         model: String,
-        traces: [ToolTraceItem]
+        traces: [ToolTraceItem],
+        toolProtocol: Bool = false
     ) throws -> MessageEntity? {
         // 0.14 §1「不产生空消息」：空正文一律不落库（失败/停止也一样）。
         if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
@@ -1731,7 +1801,9 @@ public final class ChatService {
             errorMessage: errorMessage,
             model: model,
             edited: false,
-            toolTraceJson: ToolTraceCodec.encode(traces)
+            toolTraceJson: traces.isEmpty
+                ? (toolProtocol ? OutboundProtocol.toolProtocolTraceMarker : nil)
+                : ToolTraceCodec.encode(traces)
         )
         try stores.database.inTransaction {
             try stores.messages.upsert(message)

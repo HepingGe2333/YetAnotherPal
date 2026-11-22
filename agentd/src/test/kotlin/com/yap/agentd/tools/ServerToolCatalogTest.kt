@@ -27,8 +27,10 @@ class ServerToolCatalogTest {
             ((function.fields.getValue("name") as JsonValue.Str).value)
         }
         assertEquals(ServerToolCatalog.names, names)
-        assertEquals("0.15 加了 memorize 之后是 17 个工具", 17, names.size)
+        assertEquals("0.16 把 think 也注册进来之后是 18 个工具", 18, names.size)
         assertTrue(names.containsAll(listOf(
+            // 0.16：think 不再是「客户端的提示词技巧」，它在这一轮把 reasoning_effort 升到 high。
+            "think",
             "stay_silent", "defer_reply", "set_mood", "set_activity", "diary",
             "remember", "recall", "memorize", "web_search", "web_fetch", "sticker",
             "send_message", "block_user",
@@ -83,7 +85,7 @@ class ServerToolCatalogTest {
     fun `byName is trimmed and unknown tools return null`() {
         assertNotNull(ServerToolCatalog.byName(" set_mood "))
         assertNotNull(ServerToolCatalog.byName(" update_persona "))
-        assertEquals(null, ServerToolCatalog.byName("think"))
+        assertNotNull("0.16 起 think 由服务端注册（思考强度开关）", ServerToolCatalog.byName("think"))
         assertEquals(null, ServerToolCatalog.byName("block"))
     }
 
@@ -93,8 +95,9 @@ class ServerToolCatalogTest {
         for (name in listOf("listen", "watch", "update_persona", "set_quiet_hours")) {
             assertTrue("服务端应该注册 $name", ServerToolCatalog.names.contains(name))
         }
-        // `think` 仍然只是客户端的提示词技巧，服务端不注册。
-        assertFalse("服务端不该注册 think", ServerToolCatalog.names.contains("think"))
+        // 0.16：`think` 真的由服务端执行——它不是写文案，而是把这一轮后续请求的
+        // `reasoning_effort` 从 low 升到 high（见 `ToolExecutor.think` / `LlmReplyGenerator`）。
+        assertTrue("0.16 起服务端注册 think", ServerToolCatalog.names.contains("think"))
         // sticker 的 action 现在包含 make（服务端真的会合成 GIF）。
         val sticker = ServerToolCatalog.byName("sticker")!!
         assertTrue(sticker.description.contains("现做"))

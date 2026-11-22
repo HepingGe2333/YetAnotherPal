@@ -56,19 +56,26 @@ public struct InferenceParams: Equatable, Sendable {
     public var maxOutputTokens: Int?
     public var frequencyPenalty: Double?
     public var presencePenalty: Double?
+    /// 0.16 思考强度（`spec/tool-call-agents/README.md` §2）：`low` / `high`。
+    ///
+    /// nil = 不发这个字段（ASR 之外的所有辅助调用都保持 nil：它们要稳定与便宜）。
+    /// 只有主 LLM 会话（`ChatService.generate`）设置它：默认 low、调用 `think` 之后这一轮升到 high。
+    public var reasoningEffort: ReasoningEffort?
 
     public init(
         temperature: Double? = nil,
         topP: Double? = nil,
         maxOutputTokens: Int? = nil,
         frequencyPenalty: Double? = nil,
-        presencePenalty: Double? = nil
+        presencePenalty: Double? = nil,
+        reasoningEffort: ReasoningEffort? = nil
     ) {
         self.temperature = temperature
         self.topP = topP
         self.maxOutputTokens = maxOutputTokens
         self.frequencyPenalty = frequencyPenalty
         self.presencePenalty = presencePenalty
+        self.reasoningEffort = reasoningEffort
     }
 }
 
@@ -696,6 +703,9 @@ public final class OpenAICompatibleClient: ChatCompleting {
         if let maxTokens = params.maxOutputTokens { payload["max_tokens"] = maxTokens }
         if let frequencyPenalty = params.frequencyPenalty { payload["frequency_penalty"] = frequencyPenalty }
         if let presencePenalty = params.presencePenalty { payload["presence_penalty"] = presencePenalty }
+        // 0.16 思考强度（`spec/tool-call-agents/README.md` §2）：只有主 LLM 会话会填这个字段；
+        // 不填 = 报文里连键都没有（辅助调用不必为一个用不到的字段冒「网关不认识」的风险）。
+        if let effort = params.reasoningEffort { payload["reasoning_effort"] = effort.wireValue }
         return try JSONSerialization.data(withJSONObject: payload)
     }
 

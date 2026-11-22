@@ -17,6 +17,8 @@ public final class ApiKeyStore {
     public enum Account {
         public static func apiKey(configId: String) -> String { "api-key.\(configId)" }
         public static func webToolsAPIKey(configId: String) -> String { "web-tools-api-key.\(configId)" }
+        /// 语音转写（ASR）的**独立** Key：不属于任何一条 API 配置，全局只有一条。
+        public static let asrAPIKey = "asr-api-key"
     }
 
     private let backend: KeychainBackend
@@ -64,6 +66,31 @@ public final class ApiKeyStore {
 
     public func webToolsAPIKey(for configId: String) -> String? {
         backend.get(service: service, account: Account.webToolsAPIKey(configId: configId))
+    }
+
+    // MARK: 语音转写专用 Key（0.15，全局一条）
+
+    /// 写/清语音转写的 Key。
+    ///
+    /// 为什么单独一条、不挂在某条 API 配置下：转写可以走完全另一家服务（本地 whisper、
+    /// Groq、OpenAI…），「换聊天模型」不该把转写搞坏；反过来也一样。
+    /// 空字符串视为清除（与主 Key 同一语义：空 Key 发请求只会得到 401）。
+    public func setASRAPIKey(_ key: String?) throws {
+        try write(key, account: Account.asrAPIKey)
+    }
+
+    public func asrAPIKey() -> String? {
+        backend.get(service: service, account: Account.asrAPIKey)
+    }
+
+    /// 有没有可用的转写 Key（以「Keychain 里读得出非空字符串」为准）。
+    public var hasASRAPIKey: Bool {
+        guard let key = asrAPIKey() else { return false }
+        return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    public func deleteASRAPIKey() throws {
+        try backend.delete(service: service, account: Account.asrAPIKey)
     }
 
     // MARK: 生命周期

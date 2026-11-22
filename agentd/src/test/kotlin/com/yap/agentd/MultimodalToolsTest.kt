@@ -296,8 +296,9 @@ class MultimodalToolsTest {
                     ),
                     LlmMessage.user("普通文本消息")
                 ),
-                tools = null
-            ) { }
+                tools = null,
+                onDelta = { }
+            )
             val body = TestSupport.parse(server.onlyRequest().body)
             val sent = body.arr("messages")
             val content = (sent[0] as JsonValue.Obj).fields["content"] as JsonValue.Arr

@@ -93,11 +93,16 @@ public enum ToolCatalog {
     /// `confirm=true` 才生效。到期自动解除，没有 `unblock`。
     public static let blockUser = "block_user"
 
-    /// 连发（规范 §4）：写清「一条一句」「最多 4 条」「每条 ≤120 字」，
-    /// 还要写清「不要把它当分段工具」——否则模型会把一段话硬拆成四条。
+    /// 连发（规范 §4）：写清「一条一句」「最多 4 条」「每条 ≤120 字」。
+    ///
+    /// 0.16（`spec/tool-call-agents/README.md` §1）改了语义：它不再只是「想分几条时用」，
+    /// 而是**唯一**能把话说出去的通道 —— 模型直接输出正文不再算发出去（客户端只做 legacy 兼容）。
+    /// 所以这里必须明说「每一句都调用它」，否则模型会继续用正文回答，而用户那边一片安静。
+    ///
     /// 与 Android `SEND_MESSAGE_DESCRIPTION` **逐字一致**（提示词差一个字，模型的调用率就会变）。
-    private static let sendMessageDescription = "想分几条短消息发出去时用（一句一条、想到什么先发什么）；每条最多 120 字，一轮最多 4 条。" +
-        "发完还可以继续用正文补最后一句。日常只回一句时不要用它，直接说。"
+    private static let sendMessageDescription = "你要说的每一句话都用它发（这是唯一能把话传到对方那里的方式）：一次一条、" +
+        "想到什么先发什么；每条最多 120 字，一轮最多 4 条。不要直接输出正文——正文不算发出去。"
+        + "不想说话就用 stay_silent，别用空正文拖着。"
     /// 拉黑（规范 §2）：两轮确认必须写清，否则模型会以为一次调用就生效。
     /// 与 Android `BLOCK_USER_DESCRIPTION` 逐字一致：两轮确认必须写死，否则模型会自问自答。
     private static let blockUserDescription = "对方反复越界、你确实不想再收到消息时，可以拉黑 1–24 小时。必须分两轮：" +
@@ -374,7 +379,8 @@ public enum ToolCatalog {
     ///
     /// 故意写成**具体的后果**而不是「会影响模型输出」这类空话：模型靠这些句子判断
     /// 「这件事该不该做」，也靠它们知道「失败时不要假装做过」。
-    private static let sendMessageSideEffect = "它只负责把话拆成几条；不要为了热闹而刷屏，一轮最多 4 条。"
+    private static let sendMessageSideEffect = "对方会真的收到这一条（立刻出现）；它也是你唯一能说话的方式，正文不会发出去。"
+        + "不要为了热闹而刷屏，一轮最多 4 条。"
     private static let blockUserSideEffect = "这是最后手段：先表达边界，别因为一次不高兴就拉黑；确认必须隔一轮。"
     private static let thinkSideEffect = "只在心里想一遍，不写库、不发消息、什么都不改。"
     private static let webSearchSideEffect = "会向搜索服务发一次查询（花一点额度），结果只给你自己看。"
@@ -478,6 +484,28 @@ public enum ToolCatalog {
     /// 「# 你能做什么」段的标题。0.13 起这段由工具定义生成（设计文档 §1），不再手写。
     public static let capabilitySection = "# 你能做什么"
 
+    /// 0.16（`spec/tool-call-agents/README.md` §1）：所有对外消息必须走工具。
+    ///
+    /// 为什么紧贴在工具清单正上方：模型对「你能做什么」这一段的服从度最高，
+    /// 而这段的反面（直接输出正文）此前是**允许**的 —— 不把新规则写在这里，
+    /// 模型会继续用正文回答，然后用户那边一片安静（气泡永远不会出现）。
+    ///
+    /// 三条各自对应一条验收：每条消息必须调用 `send_message`、`stay_silent` 表示不发、
+    /// 每轮 ≤4 条且每条 ≤120 字（数字与 `MessageRhythm` / `ExperienceContract` 同源）。
+    public static let outboundProtocolTitle = "## 怎么说话"
+
+    /// 中文的三条说话规则（英文版在 `ToolCatalogLanguage.englishOutboundProtocol`）。
+    public static func outboundProtocolLines() -> [String] {
+        [
+            outboundProtocolTitle,
+            "你现在**只能**通过 send_message 说话：每一句给对方看的话都必须调用 send_message(text)。"
+                + "直接输出的正文不算发出去，对方看不到。",
+            "这一轮不想说话就调用 stay_silent（只标已读、不发消息）。两个都没调用算协议违规。",
+            "send_message 每轮最多 \(MessageRhythm.maxMessagesPerRound) 条、每条不超过 "
+                + "\(MessageRhythm.maxMessageChars) 字；一次一条，想到什么先发什么，不要为了凑条数硬拆一句话。"
+        ]
+    }
+
     /// 这一轮真正交给模型的工具（联网关掉时把两个联网工具摘掉）。
     ///
     /// 它与 `toOpenAiToolsJson(_:)` 用的是**同一个数组**：提示词里说「你能用这些」，
@@ -500,8 +528,9 @@ public enum ToolCatalog {
     ///
     /// - Parameter webEnabled: 没配联网时不必勾引他去查，直接说明「你别装懂」。
     public static func capabilityPrompt(webEnabled: Bool = true) -> String {
-        var lines: [String] = [
-            capabilitySection,
+        // 0.16：`capabilitySection` 必须是第一行（有测试逐字比对），说话规则紧跟在它下面
+        //（见 `outboundProtocolLines` 的注释：模型对这一段服从度最高）。
+        var lines: [String] = [capabilitySection] + outboundProtocolLines() + [
             "你只能通过下面这些工具做事；工具做不到的事就说做不到，失败也照实说，不要假装做过。",
             "关于对方的长期事实（偏好、经历、约定）必须调用 remember 写下来，只在正文里说「记住了」不算；"
                 + "想起对方以前说过的事必须调用 memorize 去翻，不要凭印象编。"
@@ -520,7 +549,7 @@ public enum ToolCatalog {
             #"{"name":"web_search","arguments":{"query":"今天的天气"}}"#,
             "```",
             "",
-            "结果会交回给你，用自己的口吻说完，别把代码块念给对方。"
+            "结果会交回给你；要接着说就再调用 send_message，别把代码块念给对方。"
         ])
         return lines.joined(separator: "\n")
     }
@@ -1043,16 +1072,6 @@ public enum ToolProtocol {
         case ToolCatalog.watch:
             let videoId = invocation.argument("videoId") ?? ""
             return videoId.isEmpty ? "看最近那段视频" : "看视频：\(String(videoId.prefix(40)))"
-        case ToolCatalog.sendMessage:
-            let text = invocation.argument("text") ?? ""
-            return text.isEmpty ? nil : "内容：\(String(text.prefix(80)))"
-        case ToolCatalog.blockUser:
-            let hours = invocation.intArgument("hours", default: BlockPolicy.defaultHours)
-            let confirm = invocation.boolArgument("confirm") == true
-            let reason = (invocation.argument("reason") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            var hint = confirm ? "确认拉黑 \(BlockPolicy.clampHours(hours)) 小时" : "提议拉黑 \(BlockPolicy.clampHours(hours)) 小时"
-            if !reason.isEmpty { hint += "（\(String(reason.prefix(60)))）" }
-            return hint
         case ToolCatalog.sendMessage:
             // 与 Android `argumentHint` 一致："发：<前 80 字>"。
             return invocation.argument("text").map { "发：\(String($0.prefix(80)))" }

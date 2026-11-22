@@ -97,12 +97,31 @@ struct ChatAttachmentsView: View {
 struct ChatPlayableMediaView: View {
 
     let attachment: MessageAttachment
+    /// 转写那几行的颜色：出向气泡是强调色底（白字），入向是纸面（深字），
+    /// 所以由调用方（`ChatMessageRow`）按气泡样式传进来，而不是在这里猜。
+    var captionColor: Color = .secondary
 
     var body: some View {
-        if attachment.isAudio {
-            ChatAudioBubble(attachment: attachment)
-        } else if attachment.isVideo {
-            ChatVideoBubble(attachment: attachment)
+        VStack(alignment: .leading, spacing: 4) {
+            if attachment.isAudio {
+                ChatAudioBubble(attachment: attachment)
+            } else if attachment.isVideo {
+                ChatVideoBubble(attachment: attachment)
+            }
+            // 0.15 语音转写：有转写就把原话放在气泡下面（不用点播放也能知道说了什么）；
+            // 试过但没转出来时明确标一句「没有转写」—— 不假装这段语音是文字。
+            if attachment.hasTranscript, let transcript = attachment.transcript {
+                Text(transcript)
+                    .font(.caption2)
+                    .foregroundStyle(captionColor)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 232, alignment: .leading)
+            } else if attachment.transcriptIsMissing {
+                Text(L("没有转写"))
+                    .font(.caption2)
+                    .foregroundStyle(captionColor)
+            }
         }
     }
 }

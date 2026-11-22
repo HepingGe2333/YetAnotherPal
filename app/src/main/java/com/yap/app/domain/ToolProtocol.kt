@@ -232,14 +232,17 @@ object ToolCatalog {
     """
 
     /**
-     * `send_message`：一轮里分几条短消息发出去（0.14，`spec/experience/README.md` §4）。
+     * `send_message`：**唯一**的对外消息通道（0.16，`spec/tool-call-agents/README.md` §1）。
      *
-     * 它和「回复正文」不是一回事：正文是这一轮的收尾，`send_message` 是抢在收尾之前
-     * 先把一两句发出去。最多 4 条/轮，每条 ≤120 字；没有这个工具时正文会按空行自动拆。
+     * 0.14 时它只是「想分几条时用的加速器」，正文才是收尾；0.16 起反过来：
+     * 正文不再是通道，每一句给用户看的话都要调用它，哪怕只有一句。
+     * 最多 4 条/轮、每条 ≤120 字（数字来自 [ExperienceRhythm]，这里不另写一份）。
+     * 不守规矩的模型仍然会直接写正文，聊天层把它当 `legacy` 回退落一条并记日志——
+     * 但提示词里不能说「可以直接说」，否则回退会变成主路径。
      */
     private const val SEND_MESSAGE_DESCRIPTION =
-        "想分几条短消息发出去时用（一句一条、想到什么先发什么）；每条最多 120 字，一轮最多 4 条。" +
-            "发完还可以继续用正文补最后一句。日常只回一句时不要用它，直接说。"
+        "给用户发消息的唯一通道：每一句话都要用它发出去，只有一句也调用一次（一句一条、想到什么先发什么）；" +
+            "每条最多 120 字，一轮最多 4 条。不要直接输出正文；发满了就留到下一轮。"
 
     private const val SEND_MESSAGE_PARAMETERS = """
         {
@@ -530,6 +533,8 @@ object ToolCatalog {
     ): String = buildString {
         if (language == PromptLanguage.ZH) {
             appendLine(PromptTemplates.title(PromptTemplates.CoreSection.CAPABILITIES, language))
+            // 0.16：对外消息只有工具通道这一条路（规范 §1）。放在段首，比任何工具描述都强。
+            appendLine(AgentReplyProtocol.rule(language))
             appendLine(PromptContract.ToolCapability.LEAD)
             appendLine(ROUNDS_HINT)
             appendLine(MEMORY_HINT)
@@ -543,10 +548,11 @@ object ToolCatalog {
             appendLine("```${ToolProtocol.BLOCK_LANGUAGE}")
             appendLine("""{"name":"web_search","arguments":{"query":"今天的天气"}}""")
             appendLine("```")
-            appendLine("结果会交回给你；用自己的口吻说完，别把代码块念给对方。工具失败时诚实说不知道，不要假装做过。")
+            appendLine("工具结果会交回给你；要说话就再调用 send_message，别把代码块念给对方。工具失败时诚实说不知道，不要假装做过。")
         } else {
             // 非中文人格：标题/段首用共享的英文模板，工具描述用英文短句（与中文注册表同顺序、同工具数）。
             appendLine(PromptTemplates.title(PromptTemplates.CoreSection.CAPABILITIES, language))
+            appendLine(AgentReplyProtocol.rule(language))
             appendLine(EN_CAPABILITIES_LEAD)
             appendLine(EN_ROUNDS_HINT)
             appendLine(EN_MEMORY_HINT)
@@ -561,7 +567,7 @@ object ToolCatalog {
             appendLine("```${ToolProtocol.BLOCK_LANGUAGE}")
             appendLine("""{"name":"web_search","arguments":{"query":"weather today"}}""")
             appendLine("```")
-            appendLine("Results come back to you. Speak them in your own voice; never read the block out loud. " +
+            appendLine("Results come back to you. To speak, call send_message again; never read the block out loud. " +
                 "If a tool fails, say you don't know.")
         }
     }.trimEnd()
@@ -598,7 +604,7 @@ object ToolCatalog {
         STICKER to "Send, make or save a sticker.",
         LISTEN to "Actually listen to a voice message they sent.",
         WATCH to "Actually watch a video they sent (sampled frames).",
-        SEND_MESSAGE to "Send one short message; up to four per turn.",
+        SEND_MESSAGE to "The only way to say something: send one short message; up to four per turn.",
         BLOCK_USER to "As a last resort, block them for a while (needs a second confirmation next turn)."
     )
 

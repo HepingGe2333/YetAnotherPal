@@ -36,7 +36,15 @@ data class InferenceParams(
     val topP: Double? = null,
     val maxOutputTokens: Int? = null,
     val frequencyPenalty: Double? = null,
-    val presencePenalty: Double? = null
+    val presencePenalty: Double? = null,
+    /**
+     * 0.16：思考强度（OpenAI 兼容的 `reasoning_effort`），取值见
+     * [com.yap.app.domain.ReasoningEffort]。
+     *
+     * null = 这一路请求不带这个字段（ASR/搜索/摘要等辅助调用保持原样）；
+     * 只有主聊天会话会显式给 low / high（`spec/tool-call-agents/README.md` §2）。
+     */
+    val reasoningEffort: String? = null
 )
 
 /**
@@ -46,13 +54,18 @@ data class InferenceParams(
  * `temperature=0.75`、`max_tokens=16384`、`top_p=1.0`、频率/存在惩罚 0
  * （`spec/api-defaults/README.md`）。默认值写在 [ApiDefaults] 一处，聊天、主动消息、
  * 工具回路每一轮都走这里，不会出现「第一轮是 0.75、第二轮忘了带」。
+ *
+ * @param reasoningEffort 0.16：思考强度。**默认 null**（辅助调用不发这个字段）；
+ *        主聊天会话由 `ChatRepository` 显式传 `low`，调用过 `think` 的那一轮后续请求传 `high`。
  */
-fun ApiConfigEntity.inferenceParams(): InferenceParams = InferenceParams(
+fun ApiConfigEntity.inferenceParams(reasoningEffort: String? = null): InferenceParams = InferenceParams(
     temperature = temperature ?: ApiDefaults.TEMPERATURE,
     topP = topP ?: ApiDefaults.TOP_P,
     maxOutputTokens = maxOutputTokens ?: ApiDefaults.MAX_OUTPUT_TOKENS,
     frequencyPenalty = frequencyPenalty ?: ApiDefaults.FREQUENCY_PENALTY,
-    presencePenalty = presencePenalty ?: ApiDefaults.PRESENCE_PENALTY
+    presencePenalty = presencePenalty ?: ApiDefaults.PRESENCE_PENALTY,
+    // 坏值不发送：某个网关把不认识的档位当 400 时，整轮聊天都会失败。
+    reasoningEffort = com.yap.app.domain.ReasoningEffort.sanitize(reasoningEffort)
 )
 
 data class ProviderCapabilities(

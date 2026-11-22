@@ -49,7 +49,7 @@ data class ReplyRequest(
  * - [attachments]（`sticker.send`）：assistant 消息要带上的媒体引用；
  * - [toolTraceJson]：这一轮做过什么（客户端同形，落进消息表）。
  *
- * 其余字段（[toolsUsed] / [elapsedMs] / [textLength]）只用于日志与测试断言，不进协议。
+ * 其余字段（[toolsUsed] / [elapsedMs] / [textLength] / [legacy]）只用于日志与测试断言，不进协议。
  */
 data class ReplyOutcome(
     val usage: Usage,
@@ -60,11 +60,25 @@ data class ReplyOutcome(
     val elapsedMs: Long = 0L,
     val textLength: Int = 0,
     /**
-     * 0.14：这一轮真正要逐条发出的消息（`send_message` 工具收集来的，按顺序）。
+     * 这一轮真正要逐条发出的消息（`send_message` 工具收集来的，按顺序）。
      *
-     * 空列表 = 生成器没有用连发，由 `ChatService` 把已生成的文字按空行拆成 1–3 条。
+     * 0.16 起这是**唯一**的正常出口：空列表 + 有正文 = legacy 兼容回退（见 [legacy]），
+     * 由 `ChatService` 把已经流出的文字按空行拆成 1–3 条落库。
      */
     val messages: List<String> = emptyList(),
+    /**
+     * 与 [messages] 一一对应的 messageId（0.16）。
+     *
+     * `send_message` 执行时就把 id 分配好并回给了模型（「已发送，messageId=…」），
+     * `ChatService` 落库时必须用同一个 id，否则工具结果里的 id 是编的。空列表 = 没有工具消息。
+     */
+    val messageIds: List<String> = emptyList(),
+    /**
+     * 0.16：这一轮的最终正文是**兼容回退**——模型一次 `send_message` 都没调用（旧模型/不支持
+     * tools 的网关/关掉工具的降级路径）。`ChatService` 会把它当作一条 legacy assistant 消息落库
+     * 并打一行日志计入提示词迁移指标；这不是正常路径，新提示词下不应出现。
+     */
+    val legacy: Boolean = false,
     /**
      * 0.15.1：这一轮模型**想**沉默（调用了 `stay_silent`；危机轮里 `defer_reply` 也算）。
      *
@@ -170,6 +184,16 @@ data class SendMessageRequest(
  * 有正文用正文；没有正文就把安全提示作为唯一正文。`llm/LlmReplyGenerator` 还会在工具回路里
  * 直接拦掉 `stay_silent` / `defer_reply`（不执行、不发卡片、不写 defer 念头），这里再兜一次底，
  * 所以换掉生成器（测试/降级）也不会把这条安全底线漏掉。
+ *
+ * ### 完全工具调用化（0.16）
+ * 正常路径只有一条：模型用 `send_message` 发声，这里按顺序落 N 条 assistant 消息（每条一个
+ * `message.created`），最后用一个 `done` 收尾（`assistantMessageId` = 最后一条）。SSE 形状是
+ * `accepted → message.created* → done`。三个兼容分支：
+ * - **legacy**：整轮一次 `send_message` 都没有、但有正文（旧模型/旧提示词/关掉工具）→
+ *   正文按空行拆成 1–3 条落库，仍发 `message.created`，并打一行「legacy 回退」日志；
+ * - **只剩沉默**：`stay_silent` → 不落消息、`done.silent = true`（只已读）；
+ * - **协议违规**：既没有 `send_message` 也没有 `stay_silent`（`defer_reply` 除外，它的语义本来就是
+ *   这一轮不回）、连正文都没有 → 按沉默收尾并打日志，绝不落一条空消息污染历史。
  *
  * ### 危机两段式判定（0.15.2）
  * 「命中词表就算危机」太宽（「想死你了」「累得要死」），所以判定拆成两段：词表（`SafetyGuard`）
@@ -400,8 +424,18 @@ class ChatService(
                 replyTexts = listOf(SafetyGuard.crisisNote(userMessage.content))
                 crisisOverride = true
             } else {
-                // 工具回路把 3 轮都用完了、模型一个字都没说（只调工具）：同样不落空消息，
+                // 工具回路把轮数都用完了、模型一个字都没说（只调工具、也没沉默）：同样不落空消息，
                 // 用一条 `silent` 的 done 收尾（客户端只会看到「已读」，和 stay_silent 同一形状）。
+                // 0.16 起这是**协议违规**（既没 send_message 也没 stay_silent）：记一行日志，
+                // 方便从「他为什么不说话」查到提示词/模型是哪一侧退化了。
+                // `defer_reply` 的语义本来就是「这一轮不回、过一会儿再说」，不算违规。
+                val deferred = outcome.toolsUsed.any { it == com.yap.agentd.tools.ServerToolCatalog.DEFER_REPLY }
+                if (!outcome.silenceRequested && !deferred) {
+                    System.err.println(
+                        "[agentd] 协议违规：这一轮既没有 send_message 也没有 stay_silent，" +
+                            "模型一个字都没说；按沉默收尾（不落空消息）"
+                    )
+                }
                 store.addUsage(session.personaId, usage.promptTokens, usage.completionTokens)
                 store.markSessionRead(sessionId)
                 sink.emit(SseEvent.Done("", usage, silent = true))
@@ -428,8 +462,19 @@ class ChatService(
                 sink.emit(SseEvent.Delta(appended))
             }
         }
+        // 0.16：生成器一次 `send_message` 都没调用、却有正文 → legacy 兼容回退（按空行拆）。
+        // 日志是「提示词迁移指标」：新提示词/新模型下这一行不该出现。
+        val legacyFallback = !failed && !outcome.suppressed && outcome.messages.isEmpty() && replyTexts.isNotEmpty()
+        if (legacyFallback) {
+            System.err.println(
+                "[agentd] legacy 回退：这一轮没有调用 send_message，最终正文按 ${replyTexts.size} 条 " +
+                    "assistant 消息落库（兼容旧模型/旧提示词；新提示词不应出现）"
+            )
+        }
         // 有附件但没有文字（sticker.send）：仍然落一条带附件的空正文消息（与 0.13 一致）。
         val textsToPersist = if (replyTexts.isEmpty()) listOf("") else replyTexts
+        // 协议违规（既没有 send_message 也没有正文，且不是沉默工具）：上面已经按 silent 收尾；
+        // 只有「带了附件、一个字没说」这种情况会走到落库，保持与 0.13 一致。
         // 危机 override 的那一条必须发 `message.created`（客户端按它上屏；done 只是收尾）。
         val multiMessage = outcome.messages.isNotEmpty() || textsToPersist.size > 1 || crisisOverride
         // 0.14.1（§8）：延迟由服务端在**入队时**决定。离线/未启用/失败时是 `null` = 立即上屏。
@@ -444,6 +489,8 @@ class ChatService(
                 sessionId = sessionId,
                 role = MessageRole.ASSISTANT,
                 content = text,
+                // `send_message` 把 id 提前回给了模型；落库用同一个 id（legacy 回退时为空 → 存储自己发）。
+                id = outcome.messageIds.getOrNull(index)?.takeIf { it.isNotBlank() },
                 attachments = if (isLast) outcome.attachments else emptyList(),
                 source = MessageSource.CHAT,
                 replyTo = userMessage.id,

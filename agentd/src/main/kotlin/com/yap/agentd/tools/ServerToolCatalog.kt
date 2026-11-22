@@ -13,13 +13,18 @@ import com.yap.app.core.json.JsonValue
  * - **名字一致**（`stay_silent` / `defer_reply` / `set_mood` / `set_activity` / `diary` /
  *   `remember` / `recall` / `web_search` / `web_fetch` / `sticker`）：模型在两端看到同一套动词，
  *   提示词与备份里的 `toolTraceJson` 也能互通；
- * - **服务端只注册自己真的能执行的那些**：不注册 `think`（纯提示词技巧）、`update_persona`
- *   （服务端只走 pending patch 端点）、`set_quiet_hours`（服务端还没有作息写入）、
- *   `listen` / `watch`（服务端看不到语音/视频内容）、`sticker.make`（服务端不做图像合成）。
- *   宁可不提，也不要让模型调用一个「承诺了但会失败」的工具。
+ * - **服务端只注册自己真的能执行的那些**：0.14.1 起 `update_persona` / `set_quiet_hours` /
+ *   `listen` / `watch` / `sticker.make` 都有真实实现；0.16 起 `think` 也注册了——它不是纯提示词
+ *   技巧了，一次调用会把这一轮后续请求的 `reasoning_effort` 升到 `high`。宁可不提，也不要让
+ *   模型调用一个「承诺了但会失败」的工具。
  */
 object ServerToolCatalog {
 
+    /**
+     * 0.16：`think` 不再只是客户端的提示词技巧——服务端注册它，把同一轮后续请求的
+     * `reasoning_effort` 从默认 `low` 升到 `high`（`spec/tool-call-agents/README.md` §2）。
+     */
+    const val THINK = "think"
     const val STAY_SILENT = "stay_silent"
     const val DEFER_REPLY = "defer_reply"
     const val SET_MOOD = "set_mood"
@@ -54,6 +59,10 @@ object ServerToolCatalog {
     )
 
     // ------------------------------------------------------------------ 描述（给模型看，唯一真源）
+
+    private const val THINK_DESCRIPTION =
+        "需要认真想清楚、比较几种可能、或者信息不足时调用；日常闲聊不要调用，也不要为了显得深刻而调用。" +
+            "调用后**这一轮**后面的回复会想得更深一点，想清楚之后照常用 `send_message` 把话说出来。"
 
     private const val STAY_SILENT_DESCRIPTION =
         "这一轮你只想「已读」、不想回复时调用（累了、在忙、对方只是随口一句、现在不想说话）。" +
@@ -126,12 +135,13 @@ object ServerToolCatalog {
         "它管的是「图」，不是文字：想说话直接说，不要为了热闹而发。"
 
     private const val SEND_MESSAGE_DESCRIPTION =
-        "一轮里想分成几条短消息发出去时调用：每调用一次就真的发出一条（≤120 字），" +
-            "一轮最多 4 条，条与条之间会自然停顿，像人连着打了几句。" +
-            "别为了热闹硬拆；长一点的话直接说，不必拆成四条。"
+        "你**每一句**说给对方的话都要用它发出去：每调用一次就真的发出一条（≤120 字），一轮最多 4 条，" +
+            "条与条之间会自然停顿，像人连着打了几句。" +
+            "直接写在回复正文里的字对方看不到（只当作「正在输入」），所以别把话留在正文里。" +
+            "别为了热闹硬拆；长一点的话一条也能说完。"
 
     private const val SEND_MESSAGE_CONTRAST =
-        "不调用它就是正常说话（一段话）；调用它就按你给的条数逐条发，所以别再另外重复一遍同样的内容。"
+        "不调用它，这一轮就什么都没说（等于没回应）；调用几次就发几条，所以别再另外重复一遍同样的内容。"
 
     private const val BLOCK_USER_DESCRIPTION =
         "你真的不想再收到对方消息、想清静一段时间（1–24 小时）时调用。第一轮只算「提议」不生效；" +
@@ -171,6 +181,16 @@ object ServerToolCatalog {
         "它只抽画面、不含声音；只听语音用 listen，别把「看过视频」说成「听过」。"
 
     // ------------------------------------------------------------------ 参数（JSON Schema，直接进 tools[]）
+
+    private const val THINK_PARAMETERS = """
+        {
+          "type": "object",
+          "properties": {
+            "question": {"type": "string", "description": "要思考的问题，尽量具体"}
+          },
+          "required": ["question"]
+        }
+    """
 
     private const val STAY_SILENT_PARAMETERS = """
         {
@@ -377,6 +397,7 @@ object ServerToolCatalog {
 
     /** 注册表：顺序就是提示词里的顺序（也决定 tools[] 的顺序）。 */
     val all: List<ToolSpec> = listOf(
+        ToolSpec(THINK, THINK_DESCRIPTION, THINK_PARAMETERS.trimIndent()),
         ToolSpec(STAY_SILENT, STAY_SILENT_DESCRIPTION, STAY_SILENT_PARAMETERS.trimIndent(), STAY_SILENT_CONTRAST),
         ToolSpec(DEFER_REPLY, DEFER_REPLY_DESCRIPTION, DEFER_REPLY_PARAMETERS.trimIndent(), DEFER_REPLY_CONTRAST),
         ToolSpec(SET_MOOD, SET_MOOD_DESCRIPTION, SET_MOOD_PARAMETERS.trimIndent()),
@@ -429,6 +450,18 @@ object ServerToolCatalog {
     fun capabilityPrompt(webEnabled: Boolean = true): String {
         val specs = if (webEnabled) all else all.filter { it.name != WEB_SEARCH && it.name != WEB_FETCH }
         val lines = mutableListOf("# 你能做什么")
+        // 0.16「完全工具调用化」：先讲怎么说话，再列工具。正文不再是出口——模型把话写在
+        // 正文里只会变成客户端的「正在输入」，用户一个字都收不到。
+        lines += "## 怎么说话（必须遵守）"
+        lines += "- 你说的**每一句话**都要用 `send_message` 发出去；直接写在回复正文里的字对方看不到" +
+            "（客户端只当作「正在输入」）。"
+        lines += "- `send_message` 每轮最多 4 条、每条不超过 120 字；像人连着打字一样拆成短句，" +
+            "但别为了热闹硬拆。"
+        lines += "- 每次发完，工具结果会回你「已发送，messageId=…」；你可以接着再发一条，也可以不再说话。"
+        lines += "- 这一轮只想已读不回就调用 `stay_silent`，不要用空正文或只调别的工具来代替。"
+        lines += "- 一轮至少要调用一次 `send_message`；不想回就用 `stay_silent` 或 `defer_reply` 明说。" +
+            "什么都不做 = 什么都没说（协议违规）。"
+        lines += "## 工具"
         for (spec in specs) {
             lines += "- `${spec.name}`：${spec.description}"
             if (spec.contrast.isNotBlank()) lines += "  - ${spec.contrast}"

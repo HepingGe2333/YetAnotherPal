@@ -7,6 +7,7 @@ import com.yap.agentd.proactive.ActivityState
 import com.yap.agentd.proactive.ActivityAvailability
 import com.yap.agentd.store.MentalActivity
 import com.yap.agentd.store.Message
+import com.yap.agentd.store.MessageRole
 import com.yap.agentd.store.Mood
 import com.yap.agentd.store.Persona
 import com.yap.agentd.store.SessionMemory
@@ -105,6 +106,12 @@ class ChatPromptBuilder(
         mentalActivity: MentalActivity? = null
     ): List<LlmMessage> {
         val selected = history.takeLast(historyLimit.coerceAtLeast(1))
+        // 0.16 迁移兼容：旧版本落的 assistant 消息没有 `toolTraceJson`（那时正文就是回复）。
+        // 有这种历史就要说明「那是旧版本的记录，不代表你现在可以跳过 send_message」，
+        // 否则模型会照着历史的样子直接输出正文。旧消息本身**不补造**任何工具痕迹。
+        val legacyHistory = selected.any { message ->
+            message.role == MessageRole.ASSISTANT && message.toolTraceJson.isNullOrBlank()
+        }
         val context = build(
             persona = persona,
             mood = mood,
@@ -112,7 +119,8 @@ class ChatPromptBuilder(
             now = now,
             sessionMemory = sessionMemory,
             mentalActivity = mentalActivity,
-            history = selected.map { message -> historyMessage(message, now) }
+            history = selected.map { message -> historyMessage(message, now) },
+            legacyHistory = legacyHistory
         )
         return listOf(LlmMessage.system(context.system)) +
             context.history.map { LlmMessage.fromStoreRole(it.role, it.content) }
@@ -159,7 +167,9 @@ class ChatPromptBuilder(
         now: Long,
         sessionMemory: SessionMemory?,
         mentalActivity: MentalActivity?,
-        history: List<ContextAssembler.HistoryMessage>
+        history: List<ContextAssembler.HistoryMessage>,
+        /** 0.16：上下文里有旧版本（无工具痕迹）的 assistant 消息 → 注入一行迁移说明。 */
+        legacyHistory: Boolean = false
     ): ContextAssembler.Result {
         val card = PersonaFields.card(persona)
         val world = PersonaFields.world(persona)
@@ -226,7 +236,13 @@ class ChatPromptBuilder(
         }
 
         // 「你能做什么」：紧跟关系段（profile 顺序：人设 → 工具）。
-        insertAfterSection(sections, PersonaPromptScaffold.Section.RELATIONSHIP, capabilities)
+        // 有旧版本消息时在工具段末尾补一行迁移说明（不是新段，避免打乱固定顺序）。
+        val capabilitiesBlock = if (legacyHistory) {
+            capabilities.trimEnd() + "\n" + LEGACY_HISTORY_NOTE
+        } else {
+            capabilities
+        }
+        insertAfterSection(sections, PersonaPromptScaffold.Section.RELATIONSHIP, capabilitiesBlock)
 
         // 「别像 AI」：profile 的 core 五条（不反问/不总结/不列点/不总安慰/不旁白），
         // 放在工具之后、记忆之前——先知道「能做什么」，再知道「别像谁」。
@@ -389,6 +405,16 @@ class ChatPromptBuilder(
             - 只输出这一句话本身：不要引号、不要旁白、不要解释、不要换行。
             - 20–60 字，短一点也行。
         """.trimIndent()
+
+        /**
+         * 0.16 迁移说明：旧版本上下文里的 assistant 消息没有工具痕迹。
+         *
+         * 它只在**真的存在**这种消息时注入（见 [chatMessages]），并且只说一件事：
+         * 那些历史是记录，不是「现在可以绕过工具」的许可。
+         */
+        const val LEGACY_HISTORY_NOTE: String =
+            "- 历史里有些话是旧版本直接说出来的（那些消息没有工具痕迹）：那只是记录，" +
+                "不代表你现在可以跳过 `send_message` 直接把话写在正文里。"
 
         /** 心情段的标题（共享契约 `PromptContract.Section.MOOD`）。 */
         const val MOOD_SECTION = PromptContract.Section.MOOD

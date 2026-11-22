@@ -1345,8 +1345,10 @@ private fun MessageBubble(
         AttachmentsCodec.decode(message.attachmentsJson)
     }
     // 他这一轮做过什么（搜了什么、记住了什么）。折叠成一行小字，点开看细节。
+    // 0.16：`toolTrace` 里还可能有「回复通道」标记（send_message / legacy / status）——
+    // 那是给迁移判定和日志用的，不是用户可见的动作，渲染前必须过滤掉。
     val traceItems = remember(message.id, message.toolTraceJson) {
-        ToolTraceCodec.decode(message.toolTraceJson)
+        ToolTraceCodec.visible(ToolTraceCodec.decode(message.toolTraceJson))
     }
     // 展开状态跟着消息 id 走，滚动收起再回来时保持；不跨消息串味。
     var traceExpanded by rememberSaveable(message.id) { mutableStateOf(false) }

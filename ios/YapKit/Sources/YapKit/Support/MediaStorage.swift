@@ -1373,7 +1373,11 @@ public enum BackupMediaRestorer {
                     // 另一端读到的就不再是「猜」。
                     kind: attachment.resolvedMediaType?.rawValue
                         ?? BackupMediaTransfer.attachmentKind(forMime: mime),
-                    durationMs: attachment.durationMs
+                    durationMs: attachment.durationMs,
+                    // 0.15：转写跟着附件走（它描述的是「这句话是什么」，不是设备路径）。
+                    // 失败标记也一起带走：换机之后气泡上仍然显示「没有转写」，而不是假装没试过。
+                    transcript: attachment.transcript,
+                    transcriptState: attachment.transcriptState
                 )
             )
         }
@@ -1412,7 +1416,9 @@ public enum BackupMediaRestorer {
                     uri: media.uri, mime: media.mime,
                     width: attachment.width, height: attachment.height,
                     kind: attachment.normalizedKind ?? kindHint(for: media.kind),
-                    durationMs: attachment.durationMs
+                    durationMs: attachment.durationMs,
+                    transcript: attachment.transcript,
+                    transcriptState: attachment.transcriptState
                 )
             )
         }

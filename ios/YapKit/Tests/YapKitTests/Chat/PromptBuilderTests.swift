@@ -282,14 +282,17 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertGreaterThan(base.count, 1_000, "能力说明 + 输出格式这一段不能丢")
         // 0.13 多了「别像个 AI」六条（约 300 字）：上限相应放宽，但仍然要短。
         // 0.15 又加了一条「不写旁白/舞台说明」的硬约束（约 70 字），上限同步放宽到 4 800。
-        XCTAssertLessThan(base.count, 5_200)
+        // 0.16 多了「怎么说话」三条（只能通过 send_message 说话 / stay_silent / 4 条 × 120 字，
+        // 约 250 字）：上限同步放宽到 5 600，但仍然要短。
+        XCTAssertLessThan(base.count, 5_600)
         // 两段能力说明各自都有量级在 600~900 字。
         XCTAssertGreaterThan(ToolCatalog.capabilityPrompt(webEnabled: true).count, 300)
         // 0.13 加了 diary / stay_silent 和每个工具的副作用句，上限相应放宽
         //（仍然要短，不能占满上下文）。
         // 0.14 加了两件工具（send_message / block_user），工具段自然变长。
         // 0.15 又加了一件 memorize + 一段 remember/memorize 的硬要求：上限提到 4 600。
-        XCTAssertLessThan(ToolCatalog.capabilityPrompt(webEnabled: true).count, 4_600)
+        // 0.16 说话规则再 +250 字：上限提到 4 900。
+        XCTAssertLessThan(ToolCatalog.capabilityPrompt(webEnabled: true).count, 4_900)
         XCTAssertGreaterThan(ProactiveCapabilityPrompt.text.count, 300)
         XCTAssertLessThan(ProactiveCapabilityPrompt.text.count, 1_500)
     }

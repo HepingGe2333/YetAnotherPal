@@ -186,7 +186,9 @@ public final class ToolExecutor: ToolRunning {
             title: String(localized: "发了条消息"),
             subtitle: text,
             detail: text,
-            modelText: "这一条已经发出去了。想接着说下一句就再调用一次 send_message；"
+            // 0.16：messageId 由聊天链路在落库之后回填（`OutboundProtocol.sentReceipt`）；
+            // 这里只在「还没落库」的兜底文案里说清下一步，不伪造 id。
+            modelText: "这一句已经交给聊天链路发出去了。想接着说下一句就再调用一次 send_message；"
                 + "不说了就直接结束这一轮。不要再用正文重复它。"
         )
         result.outboundText = text
@@ -351,7 +353,10 @@ public final class ToolExecutor: ToolRunning {
             title: String(localized: "想了想"),
             subtitle: question.isEmpty ? nil : String(question.prefix(28)),
             detail: question.isEmpty ? String(localized: "（没有写具体问题，就是想清楚再答）") : question,
-            modelText: "（可以慢慢想。想清楚以后，直接用你自己的语气把话说完，不用把思考过程念给对方。）"
+            // 0.16：想完之后同样只能通过 `send_message` 说话；这一轮后续请求也已经升到 high
+            //（`spec/tool-call-agents/README.md` §2）。
+            modelText: "（可以慢慢想。想清楚以后，用 send_message 把你自己的话发出去，"
+                + "不用把思考过程念给对方。）"
         )
     }
 

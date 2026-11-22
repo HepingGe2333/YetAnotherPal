@@ -100,6 +100,9 @@ internal fun buildChatCompletionPayload(
     params.maxOutputTokens?.let { put("max_tokens", it) }
     params.frequencyPenalty?.let { put("frequency_penalty", it) }
     params.presencePenalty?.let { put("presence_penalty", it) }
+    // 0.16：思考强度（`spec/tool-call-agents/README.md` §2）。主聊天会话默认 low，
+    // 调用过 think 之后的后续请求是 high；辅助调用不传，请求体里就不出现这个字段。
+    params.reasoningEffort?.let { put("reasoning_effort", it) }
 }
 
 class OpenAiAdapter(

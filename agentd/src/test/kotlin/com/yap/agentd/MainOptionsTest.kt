@@ -95,6 +95,34 @@ class MainOptionsTest {
     }
 
     @Test
+    fun `reasoning effort flag and environment are parsed with command line precedence`() {
+        assertNull("默认由生成器用 low", parse().reasoningEffort)
+        assertEquals(
+            "high",
+            parse(env = mapOf("YAP_LLM_REASONING_EFFORT" to "HIGH")).reasoningEffort
+        )
+        assertEquals(
+            "命令行优先，并且大小写归一",
+            "medium",
+            parse("--reasoning-effort", "Medium", env = mapOf("YAP_LLM_REASONING_EFFORT" to "high")).reasoningEffort
+        )
+        assertEquals("medium", parse("--reasoning-effort=medium").reasoningEffort)
+
+        for (args in listOf(arrayOf("--reasoning-effort", "  "), arrayOf("--reasoning-effort="))) {
+            val failure = runCatching { parse(*args) }.exceptionOrNull()
+            assertTrue("${args.toList()} 应该解析失败：$failure", failure is IllegalArgumentException)
+            assertTrue(failure?.message?.contains("--reasoning-effort") == true)
+        }
+        for (value in listOf("hyper", "0")) {
+            val failure = runCatching { parse("--reasoning-effort", value) }.exceptionOrNull()
+            assertTrue("$value 应该解析失败：$failure", failure is IllegalArgumentException)
+            assertTrue(failure?.message?.contains("low / medium / high") == true)
+        }
+        val fromEnv = runCatching { parse(env = mapOf("YAP_LLM_REASONING_EFFORT" to "hyper")) }.exceptionOrNull()
+        assertTrue("环境变量里的坏值也要在启动时失败：$fromEnv", fromEnv is IllegalArgumentException)
+    }
+
+    @Test
     fun `blank llm flags are rejected instead of silently ignored`() {
         for (args in listOf(arrayOf("--llm-base-url", "  "), arrayOf("--llm-key="), arrayOf("--llm-model", ""))) {
             val failure = runCatching { parse(*args) }.exceptionOrNull()

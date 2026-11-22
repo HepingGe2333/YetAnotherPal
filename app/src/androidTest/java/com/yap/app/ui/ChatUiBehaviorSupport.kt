@@ -241,6 +241,14 @@ class ChatUiHarness(
                 audioVideoRepository = audioVideoRepository,
                 translationCoordinator = translationCoordinator,
                 serverTypingState = serverTypingState,
+                asrTranscriber = com.yap.app.data.repo.AsrTranscriber(
+                    configs = object : com.yap.app.data.repo.AsrConfigSource {
+                        override suspend fun availability(): com.yap.app.domain.AsrAvailability =
+                            com.yap.app.domain.AsrAvailability.Disabled
+                    },
+                    media = com.yap.app.data.repo.AsrMediaSource { null },
+                    client = com.yap.app.network.AsrClient(okhttp3.OkHttpClient(), kotlinx.serialization.json.Json)
+                ),
                 context = context
             ) as T
         }

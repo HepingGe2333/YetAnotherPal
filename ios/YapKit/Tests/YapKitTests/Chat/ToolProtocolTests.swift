@@ -225,7 +225,8 @@ final class ToolProtocolTests: XCTestCase {
         XCTAssertTrue(prompt.contains("- recall(query, depth?)："))
         // 输出格式（代码块协议 + 回灌后说完）必须在里面。
         XCTAssertTrue(prompt.contains("```yap-tool"))
-        XCTAssertTrue(prompt.contains("结果会交回给你，用自己的口吻说完，别把代码块念给对方。"))
+        // 0.16：回灌之后要说话仍然只能走 send_message（不再「用自己的口吻说完」）。
+        XCTAssertTrue(prompt.contains("结果会交回给你；要接着说就再调用 send_message，别把代码块念给对方。"))
         // 1.9：能力清单里必须有「这一轮先不回」这个动作，否则模型不知道它可以沉默。
         XCTAssertTrue(prompt.contains("- defer_reply("))
         // 0.13：日记板也要在清单里（否则模型不知道它能给自己留便条）。

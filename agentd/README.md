@@ -1424,7 +1424,8 @@ round 3: the model has to answer with what it already has
 | `set_quiet_hours` | **0.14.1.** Writes `personas.quietSleepMinutes` / `quietWakeMinutes` (local minutes after midnight) and `version + 1`; the proactive engine’s `SleepPolicy` then treats that window as sleep (cross-midnight works: `23:30–08:00`) | `start`/`end` accept `HH:MM`, `H:MM`, `HHmm`, `23点30`; equal or unparsable times are refused (no guessing). `null`/absent = no quiet window |
 
 The prompt lists **exactly** the registered tools — `ServerToolCatalogTest` fails if that ever
-drifts. `think` stays client-only (it is a prompt trick, not a server action).
+drifts. Since 0.16 `think` is registered too: it is not a prompt trick on this side, it raises the
+turn's `reasoning_effort` to `high` (see the 0.16 section).
 
 Limits and failure behaviour: `MAX_TOOL_ROUNDS = 3`, a 2-minute wall-clock deadline for the whole
 loop (a slow search cannot hold the turn forever), every tool **returns** a result instead of
@@ -1928,8 +1929,8 @@ The 83 tests added in this round:
 - `ServerToolCatalogTest` (6) — the registry **is** the `tools[]` array and the `# 你能做什么`
   section (both directions), every schema's `required` points at real properties, no networking ⇒
   no web tools, and the registry only advertises what the server can execute: 0.14.1 adds
-  `update_persona` / `set_quiet_hours` / `listen` / `watch` / `sticker.make`, while `think`
-  stays client-only.
+  `update_persona` / `set_quiet_hours` / `listen` / `watch` / `sticker.make`; 0.16 adds `think`
+  (the reasoning-effort switch).
 - `ToolExecutorTest` (24) — each tool's real effect: `stay_silent` writes nothing, `defer_reply`
   clamps minutes and writes a `PENDING` intent, `set_mood` writes all four dimensions (and clamps),
   `set_activity` normalises `kind`/`availability` and clamps minutes, `diary` add/list/remove,
@@ -2052,3 +2053,69 @@ DeepSeek baselines sometimes emit tool calls as body text (`<tool_call>…</tool
 `<tool>`). `LlmClient` now filters those tags out of the streamed text (even when a tag is split across
 deltas) and normalises the content (JSON object/array, `name({...})`, Python kwargs, or a `name=`
 attribute on the tag) into ordinary `tool_calls`, so the same tool loop executes them.
+
+
+## 0.16: tool-call-only replies and reasoning effort
+
+The 0.16 rules live in `spec/tool-call-agents/README.md`. On the server the chat path is now
+**tool-call-only**: the model does not produce the reply directly, every visible message is a
+`send_message` call, and `reasoning_effort` is a request parameter the server controls.
+
+### `send_message` is the only exit
+
+```
+round 1: system prompt + tools[]  → model calls send_message{"text":"…"}
+         tool result: 已发送，messageId=<预分配 id>（这一轮第 N 条）  → model may send another one
+…
+ChatService: persist every collected message (same id) → message.created ×N → one done
+```
+
+- `# 你能做什么` starts with `## 怎么说话（必须遵守）`: every sentence must go through
+  `send_message`, ≤4 per turn, ≤120 chars each, the tool result carries the `messageId`, and a turn
+  with neither `send_message` nor `stay_silent`/`defer_reply` is a protocol violation.
+  Text streamed outside a `send_message` call is only the client's "typing…" indicator.
+- The `messageId` is **real**: `ToolExecutor.send_message` asks `FileStore.newMessageId()` for the id
+  before the message exists, returns it to the model, and `ChatService` persists with that same id
+  (`appendMessage(..., id = …)`); so the id the model saw is the id the clients receive. Each
+  message also keeps its `toolTraceJson` (the `send_message` entry), like every other tool turn.
+- SSE shape stays `accepted → message.created* → done` (tool events in between). The count of
+  `message.created` equals the number of `send_message` calls; `done.assistantMessageId` is the last
+  one. Caps, crisis priority, blocking, the two-silent-turns limit, the delivery queue and
+  typing indicators are unchanged.
+- `think` is now a registered tool (no side effect): `ToolExecutor.think` returns a normal tool
+  result and asks the generator for `high` reasoning effort for the rest of the turn.
+
+### Legacy fallback, silence, protocol violation
+
+| what the model did | what the server does |
+| --- | --- |
+| one or more `send_message` | persists exactly those messages (same ids), one `message.created` each, one `done` |
+| no `send_message`, but a final body (old model / no tools / old prompt) | **legacy fallback**: the body is split on blank lines into 1–3 messages, persisted (no tool trace), one `message.created` each, and a `[agentd] legacy 回退` stderr line is written as the prompt-migration metric |
+| `stay_silent` only | nothing persisted, session marked read, `done.silent = true`, no `message.created` |
+| `defer_reply` only | the intent is written, nothing persisted, `done.silent = true` (not a violation) |
+| a tool call and then nothing at all | nothing persisted, `done.silent = true`, plus a `[agentd] 协议违规` line (never an empty bubble) |
+
+### Migration compatibility
+
+- Old assistant rows have no `toolTraceJson`. When such a row is in the prompt history,
+  `ChatPromptBuilder` appends `LEGACY_HISTORY_NOTE` to the capability section: *“历史里有些话是旧版本
+  直接说出来的（那些消息没有工具痕迹）：那只是记录，不代表你现在可以跳过 `send_message`。”*
+  The stored row is **never** rewritten (no fabricated tool traces).
+- Backups: the export format version is 7 (`FileStore.BACKUP_FORMAT_VERSION`) and imports accept
+  **v1–v7**, so both v6 client exports (`BackupV6Test` fixtures) and v7 files stay readable; v8 is
+  still rejected. New rows keep the client-readable `toolTraceJson` key only when there is a trace.
+
+### Reasoning effort
+
+| where | value |
+| --- | --- |
+| main chat, every request | `reasoning_effort: "low"` by default (`LlmDefaults.DEFAULT_REASONING_EFFORT`) |
+| main chat, after a `think` tool call in the same turn | `"high"` for the remaining requests of that turn |
+| next turn | back to the default (`low`, or the server override) |
+| auxiliary calls (mood / evolution / proactive / crisis classifier / ASR) | the field is **not sent** (`LlmClient.stream`/`complete` pass `null`) |
+
+The default can be overridden by the deployment: `--reasoning-effort low|medium|high` (or
+`YAP_LLM_REASONING_EFFORT`), stored on `ServerLlmConfig.reasoningEffort` →
+`LlmConfig.reasoningEffort`. An unknown value fails at startup / with `llm_invalid_config` instead
+of being silently ignored. `ToolCallOnlyTest` pins the request bodies (`low` → `high` → `low`), the
+config override, the auxiliary calls, and the rejection.

@@ -130,6 +130,8 @@ data class BackupUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
+    /** 0.15 ASR：独立 DataStore + 独立加密 Key；「删除全部数据」时也要一起清掉。 */
+    private val asrSettingsRepository: com.yap.app.data.prefs.AsrSettingsRepository,
     private val chatRepository: ChatRepository,
     personaRepository: PersonaRepository,
     private val presetRepository: PresetRepository,
@@ -363,6 +365,9 @@ class SettingsViewModel @Inject constructor(
                 // 媒体文件（files/media + files/avatars）由 ChatRepository.wipeAllData 内的
                 // DataEraser 一并清掉：删表与删文件走同一份清单，避免两处各自漏。
                 settingsRepository.resetAll(preserveSeedMarker = false)
+                // ASR 的开关/地址/Key 在独立 DataStore 里（不进备份、不上云），
+                // 但「删除全部数据」必须连它一起清：Key 不该在用户以为清空后还留在设备上。
+                asrSettingsRepository.resetAll()
                 // 服务端连接也一起清：否则「删除全部数据」之后 App 还会连回旧服务器。
                 clearServerConnectionQuietly()
                 // 与 iOS 对齐：清空之后按当前语言重新播种，别让用户面对一个空白 App。

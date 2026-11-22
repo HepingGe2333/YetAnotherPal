@@ -202,11 +202,14 @@ public extension MessageAttachment {
     /// 气泡上显示的时长（`0:07` / `1:23`）；不知道时 `--:--`。
     var durationText: String { AudioVideoLimits.durationText(durationMs) }
 
-    /// 提示词里那一行「这条消息带的是什么媒体」。
+    /// 提示词里那一行「这条消息带的是什么媒体」（**不含**转写）。
     ///
     /// 模型必须知道「这条消息不是文字，而是一段语音/视频」：否则它会以为对方发了空消息，
     /// 或者把「我听了一遍」当成真读到了转写文字。
-    var mediaContextLine: String {
+    ///
+    /// 0.15 起它只是「基础那一行」：真正的 `mediaContextLine` 在它后面再接一行
+    /// 「他说：…」（见 `AsrTranscriptContext.mediaLine(for:)`）。
+    var mediaDescriptionLine: String {
         guard isPlayableMedia else { return "" }
         let duration = durationSeconds.map { String(format: "%.1f", $0) } ?? "?"
         let kindText = isAudio ? String(localized: "语音") : String(localized: "视频")
@@ -216,6 +219,18 @@ public extension MessageAttachment {
             format: String(localized: "（这条消息是一段%@，时长 %@ 秒；媒体 id：%@。想听/看就用 %@，别猜内容。）"),
             kindText, duration, id, tool
         )
+    }
+
+    /// 提示词里那一行「这条消息带的是什么媒体」+（有的话）转写。
+    ///
+    /// 0.15 语音转写：转写成功时多一行「他说：…」；试过但失败时多一行「（这段语音没有转写）」。
+    /// 没有转写（关着 / 没试过）时与 0.13/0.14 的提示词**逐字相同** —— 老数据不受影响。
+    ///
+    /// 为什么挂在附件上（而不是改 `PromptBuilder`）：当轮消息与历史消息都读这一个属性，
+    /// 转写因此同时进入「这一轮」和「历史占位」，不需要在两条链路各写一遍。
+    /// 原始 audio / frames 的发送逻辑完全不动（转写只是多一行字，不替代音频）。
+    var mediaContextLine: String {
+        AsrTranscriptContext.mediaLine(for: self)
     }
 }
 

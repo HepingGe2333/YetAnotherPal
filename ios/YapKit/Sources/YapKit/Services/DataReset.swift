@@ -308,6 +308,9 @@ public final class DataReset {
             for id in configIds {
                 try? apiKeys.deleteKeys(for: id)
             }
+            // 语音转写的 Key 是**全局一条**、不属于任何配置：全部删除时也要清掉，
+            // 否则「回到刚装上的样子」之后 Keychain 里还留着一条没人认识的密钥。
+            try? apiKeys.deleteASRAPIKey()
         }
         // 设置先清：清完这里，「正在聊的人 / 心跳进度 / 主题」一起回到出厂；
         // 同时 `myAvatarUri` 不再是一条引用，下面的零引用判定才能删掉用户头像文件。

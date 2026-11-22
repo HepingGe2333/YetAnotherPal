@@ -3,6 +3,7 @@ package com.yap.agentd
 import com.yap.agentd.llm.LlmAccess
 import com.yap.agentd.llm.LlmClient
 import com.yap.agentd.llm.LlmConfigResolver
+import com.yap.agentd.llm.LlmDefaults
 import com.yap.agentd.llm.LlmException
 import com.yap.agentd.llm.LlmReplyGenerator
 import com.yap.agentd.llm.ServerLlmConfig
@@ -59,7 +60,9 @@ fun main(args: Array<String>) {
         server = ServerLlmConfig(
             baseUrl = options.llmBaseUrl,
             apiKey = options.llmKey,
-            model = options.llmModel
+            model = options.llmModel,
+            // 0.16：主聊天的默认思考强度（think 之后同一轮升到 high；辅助调用不带）。
+            reasoningEffort = options.reasoningEffort
         )
     )
     val llm = LlmAccess(client = LlmClient(), resolver = llmResolver)
@@ -198,6 +201,12 @@ internal data class Options(
     val llmKey: String? = null,
     val llmModel: String? = null,
     /**
+     * 0.16：主聊天的默认思考强度（`low` / `medium` / `high`；`null` = 用 low）。
+     *
+     * 只影响主 LLM 会话：情绪判定、进化评估、主动消息、ASR 这些辅助调用不带 `reasoning_effort`。
+     */
+    val reasoningEffort: String? = null,
+    /**
      * 0.14.1：系统 `ffmpeg` 的路径（`watch` 抽视频关键帧用）。
      *
      * `null` = 按 `YAP_FFMPEG` → `PATH` 里的 `ffmpeg` 自己找；找不到时 `watch` 明确回
@@ -227,6 +236,7 @@ internal fun parseOptions(
     var llmBaseUrl: String? = null
     var llmKey: String? = null
     var llmModel: String? = null
+    var reasoningEffort: String? = null
     var ffmpegPath: String? = null
     var index = 0
     while (index < args.size) {
@@ -327,6 +337,18 @@ internal fun parseOptions(
                 index += 1
             }
 
+            arg == "--reasoning-effort" -> {
+                reasoningEffort = args.getOrNull(index + 1)?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: throw IllegalArgumentException("--reasoning-effort 后面要跟 low / medium / high")
+                index += 2
+            }
+
+            arg.startsWith("--reasoning-effort=") -> {
+                reasoningEffort = arg.substringAfter("--reasoning-effort=").trim().takeIf { it.isNotEmpty() }
+                    ?: throw IllegalArgumentException("--reasoning-effort= 后面要跟 low / medium / high")
+                index += 1
+            }
+
             arg == "--ffmpeg" -> {
                 ffmpegPath = args.getOrNull(index + 1)?.trim()?.takeIf { it.isNotEmpty() }
                     ?: throw IllegalArgumentException("--ffmpeg 后面要跟 ffmpeg 可执行文件路径（或留空用 PATH）")
@@ -367,6 +389,15 @@ internal fun parseOptions(
     if (llmBaseUrl == null) llmBaseUrl = env[LlmConfigResolver.ENV_LLM_BASE_URL]?.trim()?.takeIf { it.isNotEmpty() }
     if (llmKey == null) llmKey = env[LlmConfigResolver.ENV_LLM_KEY]?.trim()?.takeIf { it.isNotEmpty() }
     if (llmModel == null) llmModel = env[LlmConfigResolver.ENV_LLM_MODEL]?.trim()?.takeIf { it.isNotEmpty() }
+    if (reasoningEffort == null) {
+        reasoningEffort = env[LlmConfigResolver.ENV_LLM_REASONING_EFFORT]?.trim()?.takeIf { it.isNotEmpty() }
+    }
+    // 取值在启动时就校验：写错了不要让「思考强度和以前一样」变成查不出来的悬案。
+    reasoningEffort = try {
+        LlmDefaults.normalizeReasoningEffort(reasoningEffort)
+    } catch (invalid: IllegalArgumentException) {
+        throw IllegalArgumentException(invalid.message ?: "推理强度不合法")
+    }
     if (ffmpegPath == null) ffmpegPath = env["YAP_FFMPEG"]?.trim()?.takeIf { it.isNotEmpty() }
     val envRateLimit = envInt(env, ENV_RATE_LIMIT)
     val envRateBurst = envInt(env, ENV_RATE_BURST)
@@ -393,6 +424,7 @@ internal fun parseOptions(
         llmBaseUrl = llmBaseUrl,
         llmKey = llmKey,
         llmModel = llmModel,
+        reasoningEffort = reasoningEffort,
         ffmpegPath = ffmpegPath,
         help = help
     )
@@ -479,7 +511,7 @@ private fun printUsage() {
           agentd [--host 127.0.0.1] [--port 8788] [--data ./agentd-data]
                  [--token <共享密钥>] [--rate-limit 60] [--rate-burst 30]
                  [--llm-base-url <地址>] [--llm-key <API key>] [--llm-model <模型名>]
-                 [--ffmpeg <可执行文件路径>]
+                 [--reasoning-effort low|medium|high] [--ffmpeg <可执行文件路径>]
 
         选项：
           --host <地址>            监听地址，默认 127.0.0.1（只给本机/同进程用）
@@ -498,6 +530,10 @@ private fun printUsage() {
                                    客户端推送的 api_configs.json + secrets.json；远程部署只用这里的配置。
           --llm-key <API key>      API key（环境变量 YAP_LLM_KEY）；本机网关可以不给
           --llm-model <模型名>     模型名，例如 deepseek-chat（环境变量 YAP_LLM_MODEL）
+          --reasoning-effort <档>  主聊天的默认思考强度：low（默认）/ medium / high
+                                   （环境变量 YAP_LLM_REASONING_EFFORT）。模型调用 think 之后
+                                   同一轮后续请求升到 high，这一轮结束回到默认值。
+                                   情绪判定/进化/主动消息等辅助调用不使用这一格。
           --ffmpeg <路径>          系统 ffmpeg 可执行文件（watch 抽视频关键帧用）；
                                    默认按 YAP_FFMPEG → PATH 查找，找不到时 watch 会明确说
                                    「服务器没有视频解码器，看不了视频」，不会伪造帧。
