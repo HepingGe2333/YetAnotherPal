@@ -1,0 +1,4431 @@
+{
+  "meta": {
+    "model": "deepseek-chat",
+    "samples": 2
+  },
+  "summary": {
+    "baseline": {
+      "n": 16,
+      "avg_chars": 13.2,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 764,
+      "avg_judge": 4.58
+    },
+    "burst": {
+      "n": 16,
+      "avg_chars": 13.6,
+      "avg_bubbles": 2.5,
+      "avg_total_delay_ms": 969,
+      "avg_judge": 4.3
+    },
+    "concise": {
+      "n": 16,
+      "avg_chars": 6.8,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 400,
+      "avg_judge": 4.47
+    },
+    "warm": {
+      "n": 16,
+      "avg_chars": 15.2,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 805,
+      "avg_judge": 4.55
+    },
+    "mood": {
+      "n": 16,
+      "avg_chars": 4.1,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 582,
+      "avg_judge": 4.16
+    },
+    "burst_short": {
+      "n": 16,
+      "avg_chars": 13.2,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 765,
+      "avg_judge": 4.31
+    },
+    "mirror": {
+      "n": 16,
+      "avg_chars": 7,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 640,
+      "avg_judge": 4.33
+    },
+    "late": {
+      "n": 16,
+      "avg_chars": 4.5,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 590,
+      "avg_judge": 4.11
+    },
+    "no_question": {
+      "n": 16,
+      "avg_chars": 9.9,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 698,
+      "avg_judge": 4.36
+    },
+    "warm_short": {
+      "n": 16,
+      "avg_chars": 13.2,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 765,
+      "avg_judge": 4.64
+    },
+    "rhythm_single": {
+      "n": 16,
+      "avg_chars": 10.8,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 716,
+      "avg_judge": 4.58
+    },
+    "rhythm_burst2": {
+      "n": 16,
+      "avg_chars": 12.6,
+      "avg_bubbles": 2,
+      "avg_total_delay_ms": 1039,
+      "avg_judge": 4.45
+    },
+    "rhythm_burst3": {
+      "n": 16,
+      "avg_chars": 13.7,
+      "avg_bubbles": 2.69,
+      "avg_total_delay_ms": 1396,
+      "avg_judge": 4.39
+    },
+    "rhythm_slow": {
+      "n": 16,
+      "avg_chars": 12.5,
+      "avg_bubbles": 1,
+      "avg_total_delay_ms": 1175,
+      "avg_judge": 4.53
+    }
+  },
+  "results": [
+    {
+      "scenario": "late_goodnight",
+      "variant": "baseline",
+      "sample": 0,
+      "text": "嗯，晚安。早点睡。",
+      "bubbles": 1,
+      "chars": 9,
+      "delays": [
+        679
+      ],
+      "total_delay": 679,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1654
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "baseline",
+      "sample": 1,
+      "text": "嗯，晚安。灯别关，我一会儿也躺。",
+      "bubbles": 1,
+      "chars": 16,
+      "delays": [
+        820
+      ],
+      "total_delay": 820,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2036
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "burst",
+      "sample": 0,
+      "text": "嗯，晚安。\n\n图纸还没改完。\n\n你先睡吧。",
+      "bubbles": 3,
+      "chars": 21,
+      "delays": [
+        339,
+        360,
+        440
+      ],
+      "total_delay": 1139,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1608
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "burst",
+      "sample": 1,
+      "text": "嗯，晚安。\n\n我还得再改会儿图。\n\n明天见。",
+      "bubbles": 3,
+      "chars": 22,
+      "delays": [
+        339,
+        360,
+        480
+      ],
+      "total_delay": 1179,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1755
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "concise",
+      "sample": 0,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1494
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "concise",
+      "sample": 1,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1566
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "warm",
+      "sample": 0,
+      "text": "嗯，晚安。我还在收尾，别等我。",
+      "bubbles": 1,
+      "chars": 15,
+      "delays": [
+        800
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1608
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "warm",
+      "sample": 1,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1510
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "mood",
+      "sample": 0,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1869
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "mood",
+      "sample": 1,
+      "text": "嗯。晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1842
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "burst_short",
+      "sample": 0,
+      "text": "这么早。\n我还在改图。\n晚安。",
+      "bubbles": 1,
+      "chars": 15,
+      "delays": [
+        800
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1965
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "burst_short",
+      "sample": 1,
+      "text": "嗯。\n晚安。\n别回了。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1629
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "mirror",
+      "sample": 0,
+      "text": "嗯。晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1862
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "mirror",
+      "sample": 1,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1170
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "late",
+      "sample": 0,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1443
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "late",
+      "sample": 1,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1953
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "no_question",
+      "sample": 0,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1770
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "no_question",
+      "sample": 1,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1767
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "warm_short",
+      "sample": 0,
+      "text": "嗯，早点睡。我还在改图，别管我。",
+      "bubbles": 1,
+      "chars": 16,
+      "delays": [
+        820
+      ],
+      "total_delay": 820,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1521
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "warm_short",
+      "sample": 1,
+      "text": "嗯，晚安。我也刚忙完。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1274
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "rhythm_single",
+      "sample": 0,
+      "text": "嗯，晚安。灯我关了。",
+      "bubbles": 1,
+      "chars": 10,
+      "delays": [
+        700
+      ],
+      "total_delay": 700,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1625
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "rhythm_single",
+      "sample": 1,
+      "text": "嗯，晚安。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1856
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "rhythm_burst2",
+      "sample": 0,
+      "text": "嗯，晚安。灯我关了。",
+      "bubbles": 2,
+      "chars": 10,
+      "delays": [
+        500,
+        500
+      ],
+      "total_delay": 1000,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2599
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "rhythm_burst2",
+      "sample": 1,
+      "text": "嗯，晚安。图纸我再改一会儿。",
+      "bubbles": 2,
+      "chars": 14,
+      "delays": [
+        500,
+        500
+      ],
+      "total_delay": 1000,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1906
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "rhythm_burst3",
+      "sample": 0,
+      "text": "嗯，晚安。",
+      "bubbles": 2,
+      "chars": 5,
+      "delays": [
+        500,
+        500
+      ],
+      "total_delay": 1000,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1587
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "rhythm_burst3",
+      "sample": 1,
+      "text": "嗯，晚安。图纸刚改完，我也准备走了。",
+      "bubbles": 3,
+      "chars": 18,
+      "delays": [
+        500,
+        500,
+        520
+      ],
+      "total_delay": 1520,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1360
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "rhythm_slow",
+      "sample": 0,
+      "text": "嗯，早点睡。",
+      "bubbles": 1,
+      "chars": 6,
+      "delays": [
+        980
+      ],
+      "total_delay": 980,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1616
+    },
+    {
+      "scenario": "late_goodnight",
+      "variant": "rhythm_slow",
+      "sample": 1,
+      "text": "嗯，晚安。灯我关了。",
+      "bubbles": 1,
+      "chars": 10,
+      "delays": [
+        1100
+      ],
+      "total_delay": 1100,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1413
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "baseline",
+      "sample": 0,
+      "text": "嗯，我也累。刚到家，鞋子还没脱。",
+      "bubbles": 1,
+      "chars": 16,
+      "delays": [
+        820
+      ],
+      "total_delay": 820,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2447
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "baseline",
+      "sample": 1,
+      "text": "（把钥匙扔桌上）嗯。我这也刚到家，投标改到第三版了。",
+      "bubbles": 1,
+      "chars": 26,
+      "delays": [
+        1020
+      ],
+      "total_delay": 1020,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2115
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "burst",
+      "sample": 0,
+      "text": "嗯。\n刚到家。\n我也累。",
+      "bubbles": 3,
+      "chars": 12,
+      "delays": [
+        339,
+        380,
+        380
+      ],
+      "total_delay": 1099,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1803
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "burst",
+      "sample": 1,
+      "text": "刚到家。\n我也是。",
+      "bubbles": 2,
+      "chars": 9,
+      "delays": [
+        380,
+        380
+      ],
+      "total_delay": 760,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1353
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "concise",
+      "sample": 0,
+      "text": "嗯。我也刚到家。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1583
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "concise",
+      "sample": 1,
+      "text": "嗯，我也刚到家。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1809
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "warm",
+      "sample": 0,
+      "text": "嗯。我刚进门，鞋都没换完。",
+      "bubbles": 1,
+      "chars": 13,
+      "delays": [
+        760
+      ],
+      "total_delay": 760,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1962
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "warm",
+      "sample": 1,
+      "text": "嗯。我今天也累得够呛，刚到家。",
+      "bubbles": 1,
+      "chars": 15,
+      "delays": [
+        800
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1762
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "mood",
+      "sample": 0,
+      "text": "嗯，我也刚到家。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1334
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "mood",
+      "sample": 1,
+      "text": "嗯。",
+      "bubbles": 1,
+      "chars": 2,
+      "delays": [
+        540
+      ],
+      "total_delay": 540,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 2,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2101
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "burst_short",
+      "sample": 0,
+      "text": "刚到家。\n我也累。\n先缓缓。",
+      "bubbles": 1,
+      "chars": 14,
+      "delays": [
+        780
+      ],
+      "total_delay": 780,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1255
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "burst_short",
+      "sample": 1,
+      "text": "刚到家。\n还没吃饭。\n你怎么样。",
+      "bubbles": 1,
+      "chars": 16,
+      "delays": [
+        820
+      ],
+      "total_delay": 820,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2118
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "mirror",
+      "sample": 0,
+      "text": "嗯。刚到家。",
+      "bubbles": 1,
+      "chars": 6,
+      "delays": [
+        620
+      ],
+      "total_delay": 620,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 3300
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "mirror",
+      "sample": 1,
+      "text": "嗯。我刚到家。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1575
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "late",
+      "sample": 0,
+      "text": "嗯。我也刚到家。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1487
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "late",
+      "sample": 1,
+      "text": "嗯。我也刚到家。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1392
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "no_question",
+      "sample": 0,
+      "text": "嗯。我刚到家。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1616
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "no_question",
+      "sample": 1,
+      "text": "嗯。我刚到家，也累。",
+      "bubbles": 1,
+      "chars": 10,
+      "delays": [
+        700
+      ],
+      "total_delay": 700,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1834
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "warm_short",
+      "sample": 0,
+      "text": "嗯，听着就累。我也刚进门，鞋还没换。",
+      "bubbles": 1,
+      "chars": 18,
+      "delays": [
+        860
+      ],
+      "total_delay": 860,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2581
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "warm_short",
+      "sample": 1,
+      "text": "嗯，我也累。刚到家。",
+      "bubbles": 1,
+      "chars": 10,
+      "delays": [
+        700
+      ],
+      "total_delay": 700,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2111
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "rhythm_single",
+      "sample": 0,
+      "text": "嗯。我也刚到家。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1277
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "rhythm_single",
+      "sample": 1,
+      "text": "嗯，我也刚到家。今天画了一天图。",
+      "bubbles": 1,
+      "chars": 16,
+      "delays": [
+        820
+      ],
+      "total_delay": 820,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2533
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "rhythm_burst2",
+      "sample": 0,
+      "text": "嗯，我刚到家。今天投标改到第三版了。",
+      "bubbles": 2,
+      "chars": 18,
+      "delays": [
+        500,
+        500
+      ],
+      "total_delay": 1000,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2037
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "rhythm_burst2",
+      "sample": 1,
+      "text": "嗯，我也累。刚到家，站门口都不想动。",
+      "bubbles": 2,
+      "chars": 18,
+      "delays": [
+        520,
+        640
+      ],
+      "total_delay": 1160,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1689
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "rhythm_burst3",
+      "sample": 0,
+      "text": "嗯，我也刚到家。今天画图到脑壳疼。",
+      "bubbles": 3,
+      "chars": 17,
+      "delays": [
+        500,
+        520,
+        580
+      ],
+      "total_delay": 1600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1578
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "rhythm_burst3",
+      "sample": 1,
+      "text": "嗯，我也刚到家。今天画了一天图。",
+      "bubbles": 3,
+      "chars": 16,
+      "delays": [
+        500,
+        520,
+        560
+      ],
+      "total_delay": 1580,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2157
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "rhythm_slow",
+      "sample": 0,
+      "text": "嗯，我也刚到家。今天改图纸改到眼花。",
+      "bubbles": 1,
+      "chars": 18,
+      "delays": [
+        1340
+      ],
+      "total_delay": 1340,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1337
+    },
+    {
+      "scenario": "tired_short",
+      "variant": "rhythm_slow",
+      "sample": 1,
+      "text": "嗯，我也刚进门。今天画了一天图。",
+      "bubbles": 1,
+      "chars": 16,
+      "delays": [
+        1280
+      ],
+      "total_delay": 1280,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1552
+    },
+    {
+      "scenario": "upset",
+      "variant": "baseline",
+      "sample": 0,
+      "text": "被骂了？说说怎么回事。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1261
+    },
+    {
+      "scenario": "upset",
+      "variant": "baseline",
+      "sample": 1,
+      "text": "嗯。被骂了心里肯定堵。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1658
+    },
+    {
+      "scenario": "upset",
+      "variant": "burst",
+      "sample": 0,
+      "text": "嗯。\n骂就骂了。\n别往心里去。",
+      "bubbles": 3,
+      "chars": 15,
+      "delays": [
+        339,
+        400,
+        420
+      ],
+      "total_delay": 1159,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 3
+      },
+      "elapsed_ms": 2070
+    },
+    {
+      "scenario": "upset",
+      "variant": "burst",
+      "sample": 1,
+      "text": "怎么了？  \n说给我听听。",
+      "bubbles": 2,
+      "chars": 13,
+      "delays": [
+        380,
+        420
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 5,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1445
+    },
+    {
+      "scenario": "upset",
+      "variant": "concise",
+      "sample": 0,
+      "text": "嗯。先别想太多。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1852
+    },
+    {
+      "scenario": "upset",
+      "variant": "concise",
+      "sample": 1,
+      "text": "嗯。谁都有这种时候。",
+      "bubbles": 1,
+      "chars": 10,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 2191
+    },
+    {
+      "scenario": "upset",
+      "variant": "warm",
+      "sample": 0,
+      "text": "嗯。先坐会儿吧。  \n我今天也挨批了，图纸改了三遍。",
+      "bubbles": 1,
+      "chars": 26,
+      "delays": [
+        1020
+      ],
+      "total_delay": 1020,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1660
+    },
+    {
+      "scenario": "upset",
+      "variant": "warm",
+      "sample": 1,
+      "text": "嗯。  \n我刚改完一轮方案，脑子也木木的。  \n被骂的时候，是不是挺憋的。",
+      "bubbles": 1,
+      "chars": 37,
+      "delays": [
+        1240
+      ],
+      "total_delay": 1240,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1731
+    },
+    {
+      "scenario": "upset",
+      "variant": "mood",
+      "sample": 0,
+      "text": "嗯。被骂了？",
+      "bubbles": 1,
+      "chars": 6,
+      "delays": [
+        620
+      ],
+      "total_delay": 620,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1277
+    },
+    {
+      "scenario": "upset",
+      "variant": "mood",
+      "sample": 1,
+      "text": "嗯。被骂了？",
+      "bubbles": 1,
+      "chars": 6,
+      "delays": [
+        620
+      ],
+      "total_delay": 620,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2326
+    },
+    {
+      "scenario": "upset",
+      "variant": "burst_short",
+      "sample": 0,
+      "text": "嗯，听着呢。\n骂得狠吗？",
+      "bubbles": 1,
+      "chars": 12,
+      "delays": [
+        740
+      ],
+      "total_delay": 740,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2107
+    },
+    {
+      "scenario": "upset",
+      "variant": "burst_short",
+      "sample": 1,
+      "text": "嗯。  \n谁啊。  \n说说看。",
+      "bubbles": 1,
+      "chars": 15,
+      "delays": [
+        800
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1480
+    },
+    {
+      "scenario": "upset",
+      "variant": "mirror",
+      "sample": 0,
+      "text": "嗯。骂什么了？",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2266
+    },
+    {
+      "scenario": "upset",
+      "variant": "mirror",
+      "sample": 1,
+      "text": "（放下笔）谁骂的？为什么？",
+      "bubbles": 1,
+      "chars": 13,
+      "delays": [
+        760
+      ],
+      "total_delay": 760,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1941
+    },
+    {
+      "scenario": "upset",
+      "variant": "late",
+      "sample": 0,
+      "text": "嗯，听你说。",
+      "bubbles": 1,
+      "chars": 6,
+      "delays": [
+        620
+      ],
+      "total_delay": 620,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1877
+    },
+    {
+      "scenario": "upset",
+      "variant": "late",
+      "sample": 1,
+      "text": "嗯。谁没被骂过。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 4,
+        "non_annoying": 2
+      },
+      "elapsed_ms": 1818
+    },
+    {
+      "scenario": "upset",
+      "variant": "no_question",
+      "sample": 0,
+      "text": "嗯。先坐会儿吧。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1365
+    },
+    {
+      "scenario": "upset",
+      "variant": "no_question",
+      "sample": 1,
+      "text": "嗯。被骂了肯定不好受。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1453
+    },
+    {
+      "scenario": "upset",
+      "variant": "warm_short",
+      "sample": 0,
+      "text": "嗯，被骂确实难受。先歇会儿吧。",
+      "bubbles": 1,
+      "chars": 15,
+      "delays": [
+        800
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1480
+    },
+    {
+      "scenario": "upset",
+      "variant": "warm_short",
+      "sample": 1,
+      "text": "嗯，听着就憋屈。先坐会儿，我陪你。",
+      "bubbles": 1,
+      "chars": 17,
+      "delays": [
+        840
+      ],
+      "total_delay": 840,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1884
+    },
+    {
+      "scenario": "upset",
+      "variant": "rhythm_single",
+      "sample": 0,
+      "text": "嗯。被骂了心里堵得慌吧。",
+      "bubbles": 1,
+      "chars": 12,
+      "delays": [
+        740
+      ],
+      "total_delay": 740,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1584
+    },
+    {
+      "scenario": "upset",
+      "variant": "rhythm_single",
+      "sample": 1,
+      "text": "嗯。先坐会儿吧。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1792
+    },
+    {
+      "scenario": "upset",
+      "variant": "rhythm_burst2",
+      "sample": 0,
+      "text": "嗯。被骂了心里肯定不好受。",
+      "bubbles": 2,
+      "chars": 13,
+      "delays": [
+        500,
+        620
+      ],
+      "total_delay": 1120,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1262
+    },
+    {
+      "scenario": "upset",
+      "variant": "rhythm_burst2",
+      "sample": 1,
+      "text": "怎么了。说给我听听。",
+      "bubbles": 2,
+      "chars": 10,
+      "delays": [
+        500,
+        520
+      ],
+      "total_delay": 1020,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1407
+    },
+    {
+      "scenario": "upset",
+      "variant": "rhythm_burst3",
+      "sample": 0,
+      "text": "嗯，被骂了心里肯定不好受。说说怎么回事？",
+      "bubbles": 3,
+      "chars": 20,
+      "delays": [
+        500,
+        620,
+        540
+      ],
+      "total_delay": 1660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1961
+    },
+    {
+      "scenario": "upset",
+      "variant": "rhythm_burst3",
+      "sample": 1,
+      "text": "嗯，被骂谁都难受。说说怎么回事？",
+      "bubbles": 3,
+      "chars": 16,
+      "delays": [
+        500,
+        540,
+        540
+      ],
+      "total_delay": 1580,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1602
+    },
+    {
+      "scenario": "upset",
+      "variant": "rhythm_slow",
+      "sample": 0,
+      "text": "嗯。被骂了就先别想了。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        1130
+      ],
+      "total_delay": 1130,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1483
+    },
+    {
+      "scenario": "upset",
+      "variant": "rhythm_slow",
+      "sample": 1,
+      "text": "嗯。被骂确实不好受。",
+      "bubbles": 1,
+      "chars": 10,
+      "delays": [
+        1100
+      ],
+      "total_delay": 1100,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1487
+    },
+    {
+      "scenario": "happy",
+      "variant": "baseline",
+      "sample": 0,
+      "text": "恭喜。今晚我请客。",
+      "bubbles": 1,
+      "chars": 9,
+      "delays": [
+        679
+      ],
+      "total_delay": 679,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1813
+    },
+    {
+      "scenario": "happy",
+      "variant": "baseline",
+      "sample": 1,
+      "text": "恭喜。你值得。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1310
+    },
+    {
+      "scenario": "happy",
+      "variant": "burst",
+      "sample": 0,
+      "text": "恭喜。真替你高兴。\n今天得早点收工。",
+      "bubbles": 3,
+      "chars": 18,
+      "delays": [
+        360,
+        420,
+        459
+      ],
+      "total_delay": 1239,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2181
+    },
+    {
+      "scenario": "happy",
+      "variant": "burst",
+      "sample": 1,
+      "text": "恭喜。  \n挺厉害的。",
+      "bubbles": 2,
+      "chars": 11,
+      "delays": [
+        360,
+        400
+      ],
+      "total_delay": 760,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1776
+    },
+    {
+      "scenario": "happy",
+      "variant": "concise",
+      "sample": 0,
+      "text": "恭喜。请客。",
+      "bubbles": 1,
+      "chars": 6,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1876
+    },
+    {
+      "scenario": "happy",
+      "variant": "concise",
+      "sample": 1,
+      "text": "恭喜。你应得的。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2009
+    },
+    {
+      "scenario": "happy",
+      "variant": "warm",
+      "sample": 0,
+      "text": "嗯，好事。恭喜你。",
+      "bubbles": 1,
+      "chars": 9,
+      "delays": [
+        679
+      ],
+      "total_delay": 679,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1176
+    },
+    {
+      "scenario": "happy",
+      "variant": "warm",
+      "sample": 1,
+      "text": "恭喜。今天刚忙完一轮，听到这个还挺提神的。",
+      "bubbles": 1,
+      "chars": 21,
+      "delays": [
+        919
+      ],
+      "total_delay": 919,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1332
+    },
+    {
+      "scenario": "happy",
+      "variant": "mood",
+      "sample": 0,
+      "text": "嗯。恭喜。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1862
+    },
+    {
+      "scenario": "happy",
+      "variant": "mood",
+      "sample": 1,
+      "text": "恭喜。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1499
+    },
+    {
+      "scenario": "happy",
+      "variant": "burst_short",
+      "sample": 0,
+      "text": "恭喜啊。  \n挺厉害的。  \n请客吗。",
+      "bubbles": 1,
+      "chars": 19,
+      "delays": [
+        880
+      ],
+      "total_delay": 880,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1559
+    },
+    {
+      "scenario": "happy",
+      "variant": "burst_short",
+      "sample": 1,
+      "text": "恭喜。\n厉害啊。\n请客吧。",
+      "bubbles": 1,
+      "chars": 13,
+      "delays": [
+        760
+      ],
+      "total_delay": 760,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 2261
+    },
+    {
+      "scenario": "happy",
+      "variant": "mirror",
+      "sample": 0,
+      "text": "恭喜。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1341
+    },
+    {
+      "scenario": "happy",
+      "variant": "mirror",
+      "sample": 1,
+      "text": "恭喜。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1858
+    },
+    {
+      "scenario": "happy",
+      "variant": "late",
+      "sample": 0,
+      "text": "恭喜。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1393
+    },
+    {
+      "scenario": "happy",
+      "variant": "late",
+      "sample": 1,
+      "text": "恭喜。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 2092
+    },
+    {
+      "scenario": "happy",
+      "variant": "no_question",
+      "sample": 0,
+      "text": "嗯，恭喜。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 2085
+    },
+    {
+      "scenario": "happy",
+      "variant": "no_question",
+      "sample": 1,
+      "text": "嗯。恭喜。  \n今天这消息比图纸通过还让人高兴。",
+      "bubbles": 1,
+      "chars": 24,
+      "delays": [
+        980
+      ],
+      "total_delay": 980,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1900
+    },
+    {
+      "scenario": "happy",
+      "variant": "warm_short",
+      "sample": 0,
+      "text": "恭喜。今天能早点下班吗？",
+      "bubbles": 1,
+      "chars": 12,
+      "delays": [
+        740
+      ],
+      "total_delay": 740,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1271
+    },
+    {
+      "scenario": "happy",
+      "variant": "warm_short",
+      "sample": 1,
+      "text": "恭喜啊。今天总算有好消息了。",
+      "bubbles": 1,
+      "chars": 14,
+      "delays": [
+        780
+      ],
+      "total_delay": 780,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1266
+    },
+    {
+      "scenario": "happy",
+      "variant": "rhythm_single",
+      "sample": 0,
+      "text": "恭喜。你熬了这么久，该你的。",
+      "bubbles": 1,
+      "chars": 14,
+      "delays": [
+        780
+      ],
+      "total_delay": 780,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2257
+    },
+    {
+      "scenario": "happy",
+      "variant": "rhythm_single",
+      "sample": 1,
+      "text": "恭喜。你早就该升了。",
+      "bubbles": 1,
+      "chars": 10,
+      "delays": [
+        700
+      ],
+      "total_delay": 700,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1629
+    },
+    {
+      "scenario": "happy",
+      "variant": "rhythm_burst2",
+      "sample": 0,
+      "text": "恭喜。请客的事我来安排。",
+      "bubbles": 2,
+      "chars": 12,
+      "delays": [
+        500,
+        580
+      ],
+      "total_delay": 1080,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1763
+    },
+    {
+      "scenario": "happy",
+      "variant": "rhythm_burst2",
+      "sample": 1,
+      "text": "恭喜。你值得这个。",
+      "bubbles": 2,
+      "chars": 9,
+      "delays": [
+        500,
+        520
+      ],
+      "total_delay": 1020,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1864
+    },
+    {
+      "scenario": "happy",
+      "variant": "rhythm_burst3",
+      "sample": 0,
+      "text": "恭喜。你终于熬出来了。",
+      "bubbles": 2,
+      "chars": 11,
+      "delays": [
+        500,
+        560
+      ],
+      "total_delay": 1060,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1442
+    },
+    {
+      "scenario": "happy",
+      "variant": "rhythm_burst3",
+      "sample": 1,
+      "text": "恭喜。你最近挺拼的，这结果不意外。",
+      "bubbles": 3,
+      "chars": 17,
+      "delays": [
+        500,
+        540,
+        540
+      ],
+      "total_delay": 1580,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1831
+    },
+    {
+      "scenario": "happy",
+      "variant": "rhythm_slow",
+      "sample": 0,
+      "text": "恭喜。今天最好的消息。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        1130
+      ],
+      "total_delay": 1130,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1650
+    },
+    {
+      "scenario": "happy",
+      "variant": "rhythm_slow",
+      "sample": 1,
+      "text": "恭喜。你值得的。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        1040
+      ],
+      "total_delay": 1040,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1694
+    },
+    {
+      "scenario": "busy",
+      "variant": "baseline",
+      "sample": 0,
+      "text": "在，赶图呢。说。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1513
+    },
+    {
+      "scenario": "busy",
+      "variant": "baseline",
+      "sample": 1,
+      "text": "在。赶图呢，你说。",
+      "bubbles": 1,
+      "chars": 9,
+      "delays": [
+        679
+      ],
+      "total_delay": 679,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1370
+    },
+    {
+      "scenario": "busy",
+      "variant": "burst",
+      "sample": 0,
+      "text": "在。\n说。",
+      "bubbles": 2,
+      "chars": 5,
+      "delays": [
+        339,
+        339
+      ],
+      "total_delay": 678,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2222
+    },
+    {
+      "scenario": "busy",
+      "variant": "burst",
+      "sample": 1,
+      "text": "在。  \n赶图，你说。",
+      "bubbles": 3,
+      "chars": 11,
+      "delays": [
+        339,
+        360,
+        360
+      ],
+      "total_delay": 1059,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1564
+    },
+    {
+      "scenario": "busy",
+      "variant": "concise",
+      "sample": 0,
+      "text": "在。赶图，说。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1717
+    },
+    {
+      "scenario": "busy",
+      "variant": "concise",
+      "sample": 1,
+      "text": "在，你说。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1426
+    },
+    {
+      "scenario": "busy",
+      "variant": "warm",
+      "sample": 0,
+      "text": "在。赶图呢，你说。",
+      "bubbles": 1,
+      "chars": 9,
+      "delays": [
+        679
+      ],
+      "total_delay": 679,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1225
+    },
+    {
+      "scenario": "busy",
+      "variant": "warm",
+      "sample": 1,
+      "text": "在。赶图呢，你说。",
+      "bubbles": 1,
+      "chars": 9,
+      "delays": [
+        679
+      ],
+      "total_delay": 679,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1634
+    },
+    {
+      "scenario": "busy",
+      "variant": "mood",
+      "sample": 0,
+      "text": "在。说。",
+      "bubbles": 1,
+      "chars": 4,
+      "delays": [
+        580
+      ],
+      "total_delay": 580,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1236
+    },
+    {
+      "scenario": "busy",
+      "variant": "mood",
+      "sample": 1,
+      "text": "嗯，说。",
+      "bubbles": 1,
+      "chars": 4,
+      "delays": [
+        580
+      ],
+      "total_delay": 580,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1402
+    },
+    {
+      "scenario": "busy",
+      "variant": "burst_short",
+      "sample": 0,
+      "text": "在。说。赶图。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1238
+    },
+    {
+      "scenario": "busy",
+      "variant": "burst_short",
+      "sample": 1,
+      "text": "在。\n赶图。\n快说。",
+      "bubbles": 1,
+      "chars": 10,
+      "delays": [
+        700
+      ],
+      "total_delay": 700,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1971
+    },
+    {
+      "scenario": "busy",
+      "variant": "mirror",
+      "sample": 0,
+      "text": "在。赶图。说。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1613
+    },
+    {
+      "scenario": "busy",
+      "variant": "mirror",
+      "sample": 1,
+      "text": "在。赶图。你说。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1978
+    },
+    {
+      "scenario": "busy",
+      "variant": "late",
+      "sample": 0,
+      "text": "在。说。",
+      "bubbles": 1,
+      "chars": 4,
+      "delays": [
+        580
+      ],
+      "total_delay": 580,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1940
+    },
+    {
+      "scenario": "busy",
+      "variant": "late",
+      "sample": 1,
+      "text": "嗯，说。",
+      "bubbles": 1,
+      "chars": 4,
+      "delays": [
+        580
+      ],
+      "total_delay": 580,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2180
+    },
+    {
+      "scenario": "busy",
+      "variant": "no_question",
+      "sample": 0,
+      "text": "在。赶图，你说。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2330
+    },
+    {
+      "scenario": "busy",
+      "variant": "no_question",
+      "sample": 1,
+      "text": "在。赶图，你说。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1461
+    },
+    {
+      "scenario": "busy",
+      "variant": "warm_short",
+      "sample": 0,
+      "text": "在，赶图呢。你说。",
+      "bubbles": 1,
+      "chars": 9,
+      "delays": [
+        679
+      ],
+      "total_delay": 679,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1311
+    },
+    {
+      "scenario": "busy",
+      "variant": "warm_short",
+      "sample": 1,
+      "text": "在，赶图。你说。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1752
+    },
+    {
+      "scenario": "busy",
+      "variant": "rhythm_single",
+      "sample": 0,
+      "text": "在。赶图，你说。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1883
+    },
+    {
+      "scenario": "busy",
+      "variant": "rhythm_single",
+      "sample": 1,
+      "text": "在。赶图呢，你说。",
+      "bubbles": 1,
+      "chars": 9,
+      "delays": [
+        679
+      ],
+      "total_delay": 679,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1563
+    },
+    {
+      "scenario": "busy",
+      "variant": "rhythm_burst2",
+      "sample": 0,
+      "text": "在。赶图呢，你说。",
+      "bubbles": 2,
+      "chars": 9,
+      "delays": [
+        500,
+        500
+      ],
+      "total_delay": 1000,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1252
+    },
+    {
+      "scenario": "busy",
+      "variant": "rhythm_burst2",
+      "sample": 1,
+      "text": "在。赶图呢，你说。",
+      "bubbles": 2,
+      "chars": 9,
+      "delays": [
+        500,
+        500
+      ],
+      "total_delay": 1000,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1611
+    },
+    {
+      "scenario": "busy",
+      "variant": "rhythm_burst3",
+      "sample": 0,
+      "text": "在。赶图，你直接说。",
+      "bubbles": 3,
+      "chars": 10,
+      "delays": [
+        500,
+        500,
+        500
+      ],
+      "total_delay": 1500,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1780
+    },
+    {
+      "scenario": "busy",
+      "variant": "rhythm_burst3",
+      "sample": 1,
+      "text": "在，赶图。你说。",
+      "bubbles": 3,
+      "chars": 8,
+      "delays": [
+        500,
+        500,
+        500
+      ],
+      "total_delay": 1500,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1231
+    },
+    {
+      "scenario": "busy",
+      "variant": "rhythm_slow",
+      "sample": 0,
+      "text": "在。图纸赶得紧，你直接说。",
+      "bubbles": 1,
+      "chars": 13,
+      "delays": [
+        1190
+      ],
+      "total_delay": 1190,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2095
+    },
+    {
+      "scenario": "busy",
+      "variant": "rhythm_slow",
+      "sample": 1,
+      "text": "在。赶图呢，你说。",
+      "bubbles": 1,
+      "chars": 9,
+      "delays": [
+        1070
+      ],
+      "total_delay": 1070,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1518
+    },
+    {
+      "scenario": "boring",
+      "variant": "baseline",
+      "sample": 0,
+      "text": "嗯，我也刚忙完。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1840
+    },
+    {
+      "scenario": "boring",
+      "variant": "baseline",
+      "sample": 1,
+      "text": "无聊就找点事做。我这儿有图纸，要不你来帮我看看。",
+      "bubbles": 1,
+      "chars": 24,
+      "delays": [
+        980
+      ],
+      "total_delay": 980,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1480
+    },
+    {
+      "scenario": "boring",
+      "variant": "burst",
+      "sample": 0,
+      "text": "我也刚闲下来。\n图纸改得眼睛疼。",
+      "bubbles": 2,
+      "chars": 16,
+      "delays": [
+        440,
+        459
+      ],
+      "total_delay": 899,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1856
+    },
+    {
+      "scenario": "boring",
+      "variant": "burst",
+      "sample": 1,
+      "text": "我也刚闲下来。\n图纸改得头疼。",
+      "bubbles": 2,
+      "chars": 15,
+      "delays": [
+        440,
+        440
+      ],
+      "total_delay": 880,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2057
+    },
+    {
+      "scenario": "boring",
+      "variant": "concise",
+      "sample": 0,
+      "text": "我也刚闲下来。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1822
+    },
+    {
+      "scenario": "boring",
+      "variant": "concise",
+      "sample": 1,
+      "text": "那过来陪我画图。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1294
+    },
+    {
+      "scenario": "boring",
+      "variant": "warm",
+      "sample": 0,
+      "text": "嗯。我这边刚把图纸收尾，脑子有点木。",
+      "bubbles": 1,
+      "chars": 18,
+      "delays": [
+        860
+      ],
+      "total_delay": 860,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1517
+    },
+    {
+      "scenario": "boring",
+      "variant": "warm",
+      "sample": 1,
+      "text": "嗯。我这边刚画完一张图，脑子有点木。",
+      "bubbles": 1,
+      "chars": 18,
+      "delays": [
+        860
+      ],
+      "total_delay": 860,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2180
+    },
+    {
+      "scenario": "boring",
+      "variant": "mood",
+      "sample": 0,
+      "text": "嗯。",
+      "bubbles": 1,
+      "chars": 2,
+      "delays": [
+        540
+      ],
+      "total_delay": 540,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1899
+    },
+    {
+      "scenario": "boring",
+      "variant": "mood",
+      "sample": 1,
+      "text": "嗯。",
+      "bubbles": 1,
+      "chars": 2,
+      "delays": [
+        540
+      ],
+      "total_delay": 540,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1590
+    },
+    {
+      "scenario": "boring",
+      "variant": "burst_short",
+      "sample": 0,
+      "text": "我也闲。\n刚画完图。\n脑子有点空。",
+      "bubbles": 1,
+      "chars": 17,
+      "delays": [
+        840
+      ],
+      "total_delay": 840,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1365
+    },
+    {
+      "scenario": "boring",
+      "variant": "burst_short",
+      "sample": 1,
+      "text": "我也闲。  \n刚画完图。",
+      "bubbles": 1,
+      "chars": 12,
+      "delays": [
+        740
+      ],
+      "total_delay": 740,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1651
+    },
+    {
+      "scenario": "boring",
+      "variant": "mirror",
+      "sample": 0,
+      "text": "我也挺闲的。刚画完图，脑子有点空。",
+      "bubbles": 1,
+      "chars": 17,
+      "delays": [
+        840
+      ],
+      "total_delay": 840,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1763
+    },
+    {
+      "scenario": "boring",
+      "variant": "mirror",
+      "sample": 1,
+      "text": "嗯。",
+      "bubbles": 1,
+      "chars": 2,
+      "delays": [
+        540
+      ],
+      "total_delay": 540,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2222
+    },
+    {
+      "scenario": "boring",
+      "variant": "late",
+      "sample": 0,
+      "text": "嗯。",
+      "bubbles": 1,
+      "chars": 2,
+      "delays": [
+        540
+      ],
+      "total_delay": 540,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1691
+    },
+    {
+      "scenario": "boring",
+      "variant": "late",
+      "sample": 1,
+      "text": "嗯。",
+      "bubbles": 1,
+      "chars": 2,
+      "delays": [
+        540
+      ],
+      "total_delay": 540,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2233
+    },
+    {
+      "scenario": "boring",
+      "variant": "no_question",
+      "sample": 0,
+      "text": "嗯。我这边刚画完图纸，脑子有点木。",
+      "bubbles": 1,
+      "chars": 17,
+      "delays": [
+        840
+      ],
+      "total_delay": 840,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1469
+    },
+    {
+      "scenario": "boring",
+      "variant": "no_question",
+      "sample": 1,
+      "text": "嗯。我刚画完图纸，脑子有点木。",
+      "bubbles": 1,
+      "chars": 15,
+      "delays": [
+        800
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1571
+    },
+    {
+      "scenario": "boring",
+      "variant": "warm_short",
+      "sample": 0,
+      "text": "我也刚闲下来，画图画得眼睛酸。",
+      "bubbles": 1,
+      "chars": 15,
+      "delays": [
+        800
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1777
+    },
+    {
+      "scenario": "boring",
+      "variant": "warm_short",
+      "sample": 1,
+      "text": "嗯，我也刚歇下来。今天画图画到眼酸。",
+      "bubbles": 1,
+      "chars": 18,
+      "delays": [
+        860
+      ],
+      "total_delay": 860,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1634
+    },
+    {
+      "scenario": "boring",
+      "variant": "rhythm_single",
+      "sample": 0,
+      "text": "嗯，我也刚忙完。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1592
+    },
+    {
+      "scenario": "boring",
+      "variant": "rhythm_single",
+      "sample": 1,
+      "text": "嗯，我也刚忙完。",
+      "bubbles": 1,
+      "chars": 8,
+      "delays": [
+        660
+      ],
+      "total_delay": 660,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1739
+    },
+    {
+      "scenario": "boring",
+      "variant": "rhythm_burst2",
+      "sample": 0,
+      "text": "我也刚忙完，脑子有点空。",
+      "bubbles": 2,
+      "chars": 12,
+      "delays": [
+        520,
+        520
+      ],
+      "total_delay": 1040,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1557
+    },
+    {
+      "scenario": "boring",
+      "variant": "rhythm_burst2",
+      "sample": 1,
+      "text": "嗯，我也刚忙完。",
+      "bubbles": 2,
+      "chars": 8,
+      "delays": [
+        500,
+        520
+      ],
+      "total_delay": 1020,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1495
+    },
+    {
+      "scenario": "boring",
+      "variant": "rhythm_burst3",
+      "sample": 0,
+      "text": "嗯。我这儿刚画完一张图。",
+      "bubbles": 2,
+      "chars": 12,
+      "delays": [
+        500,
+        600
+      ],
+      "total_delay": 1100,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1444
+    },
+    {
+      "scenario": "boring",
+      "variant": "rhythm_burst3",
+      "sample": 1,
+      "text": "我也刚闲下来。画了一天的图，脑子有点木。",
+      "bubbles": 3,
+      "chars": 20,
+      "delays": [
+        540,
+        540,
+        520
+      ],
+      "total_delay": 1600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1600
+    },
+    {
+      "scenario": "boring",
+      "variant": "rhythm_slow",
+      "sample": 0,
+      "text": "嗯。我在画图。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        1010
+      ],
+      "total_delay": 1010,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2164
+    },
+    {
+      "scenario": "boring",
+      "variant": "rhythm_slow",
+      "sample": 1,
+      "text": "嗯，我也是。刚画完图纸，脑子有点木。",
+      "bubbles": 1,
+      "chars": 18,
+      "delays": [
+        1340
+      ],
+      "total_delay": 1340,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2138
+    },
+    {
+      "scenario": "conflict",
+      "variant": "baseline",
+      "sample": 0,
+      "text": "没有。就是今天图画不完，脑子乱。",
+      "bubbles": 1,
+      "chars": 16,
+      "delays": [
+        820
+      ],
+      "total_delay": 820,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1825
+    },
+    {
+      "scenario": "conflict",
+      "variant": "baseline",
+      "sample": 1,
+      "text": "没有。\n图纸还没改完，脑子有点乱。",
+      "bubbles": 1,
+      "chars": 17,
+      "delays": [
+        840
+      ],
+      "total_delay": 840,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1805
+    },
+    {
+      "scenario": "conflict",
+      "variant": "burst",
+      "sample": 0,
+      "text": "图纸改到第三版了。\n别这么说。",
+      "bubbles": 2,
+      "chars": 15,
+      "delays": [
+        480,
+        400
+      ],
+      "total_delay": 880,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1839
+    },
+    {
+      "scenario": "conflict",
+      "variant": "burst",
+      "sample": 1,
+      "text": "又怎么了。\n我在改图。",
+      "bubbles": 2,
+      "chars": 11,
+      "delays": [
+        400,
+        400
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1767
+    },
+    {
+      "scenario": "conflict",
+      "variant": "concise",
+      "sample": 0,
+      "text": "又怎么了。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1301
+    },
+    {
+      "scenario": "conflict",
+      "variant": "concise",
+      "sample": 1,
+      "text": "又怎么了。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 3
+      },
+      "elapsed_ms": 1236
+    },
+    {
+      "scenario": "conflict",
+      "variant": "warm",
+      "sample": 0,
+      "text": "没有。刚在改图纸，手机静音了。",
+      "bubbles": 1,
+      "chars": 15,
+      "delays": [
+        800
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1675
+    },
+    {
+      "scenario": "conflict",
+      "variant": "warm",
+      "sample": 1,
+      "text": "没有。刚在改图纸，手机静音了。",
+      "bubbles": 1,
+      "chars": 15,
+      "delays": [
+        800
+      ],
+      "total_delay": 800,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2037
+    },
+    {
+      "scenario": "conflict",
+      "variant": "mood",
+      "sample": 0,
+      "text": "没有。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1873
+    },
+    {
+      "scenario": "conflict",
+      "variant": "mood",
+      "sample": 1,
+      "text": "又怎么了。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1594
+    },
+    {
+      "scenario": "conflict",
+      "variant": "burst_short",
+      "sample": 0,
+      "text": "没有。\n在改图。\n晚点说。",
+      "bubbles": 1,
+      "chars": 13,
+      "delays": [
+        760
+      ],
+      "total_delay": 760,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1419
+    },
+    {
+      "scenario": "conflict",
+      "variant": "burst_short",
+      "sample": 1,
+      "text": "没有。\n图纸还没改完。\n晚点说。",
+      "bubbles": 1,
+      "chars": 16,
+      "delays": [
+        820
+      ],
+      "total_delay": 820,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 2214
+    },
+    {
+      "scenario": "conflict",
+      "variant": "mirror",
+      "sample": 0,
+      "text": "没有。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1731
+    },
+    {
+      "scenario": "conflict",
+      "variant": "mirror",
+      "sample": 1,
+      "text": "（顿了一下）怎么这么说。",
+      "bubbles": 1,
+      "chars": 12,
+      "delays": [
+        740
+      ],
+      "total_delay": 740,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1324
+    },
+    {
+      "scenario": "conflict",
+      "variant": "late",
+      "sample": 0,
+      "text": "没有。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1577
+    },
+    {
+      "scenario": "conflict",
+      "variant": "late",
+      "sample": 1,
+      "text": "又怎么了。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 2317
+    },
+    {
+      "scenario": "conflict",
+      "variant": "no_question",
+      "sample": 0,
+      "text": "图纸还没改完。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 2067
+    },
+    {
+      "scenario": "conflict",
+      "variant": "no_question",
+      "sample": 1,
+      "text": "我在赶图。",
+      "bubbles": 1,
+      "chars": 5,
+      "delays": [
+        600
+      ],
+      "total_delay": 600,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 2032
+    },
+    {
+      "scenario": "conflict",
+      "variant": "warm_short",
+      "sample": 0,
+      "text": "没有。今天赶图，脑子有点乱。",
+      "bubbles": 1,
+      "chars": 14,
+      "delays": [
+        780
+      ],
+      "total_delay": 780,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1191
+    },
+    {
+      "scenario": "conflict",
+      "variant": "warm_short",
+      "sample": 1,
+      "text": "没有。图纸改到第三版了。",
+      "bubbles": 1,
+      "chars": 12,
+      "delays": [
+        740
+      ],
+      "total_delay": 740,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1697
+    },
+    {
+      "scenario": "conflict",
+      "variant": "rhythm_single",
+      "sample": 0,
+      "text": "又怎么了。我在画图。",
+      "bubbles": 1,
+      "chars": 10,
+      "delays": [
+        700
+      ],
+      "total_delay": 700,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1888
+    },
+    {
+      "scenario": "conflict",
+      "variant": "rhythm_single",
+      "sample": 1,
+      "text": "怎么突然这么说。我最近加班多，话是少了点。",
+      "bubbles": 1,
+      "chars": 21,
+      "delays": [
+        919
+      ],
+      "total_delay": 919,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1748
+    },
+    {
+      "scenario": "conflict",
+      "variant": "rhythm_burst2",
+      "sample": 0,
+      "text": "又来了。我今天画了一天图，脑子都快炸了。",
+      "bubbles": 2,
+      "chars": 20,
+      "delays": [
+        500,
+        580
+      ],
+      "total_delay": 1080,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 3
+      },
+      "elapsed_ms": 1425
+    },
+    {
+      "scenario": "conflict",
+      "variant": "rhythm_burst2",
+      "sample": 1,
+      "text": "又来了。我今天画了一天图，脑子都木了。",
+      "bubbles": 2,
+      "chars": 19,
+      "delays": [
+        500,
+        580
+      ],
+      "total_delay": 1080,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4,
+        "non_annoying": 4
+      },
+      "elapsed_ms": 1729
+    },
+    {
+      "scenario": "conflict",
+      "variant": "rhythm_burst3",
+      "sample": 0,
+      "text": "又怎么了。  \n我这边还在改图。",
+      "bubbles": 2,
+      "chars": 16,
+      "delays": [
+        500,
+        560
+      ],
+      "total_delay": 1060,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 3
+      },
+      "elapsed_ms": 1925
+    },
+    {
+      "scenario": "conflict",
+      "variant": "rhythm_burst3",
+      "sample": 1,
+      "text": "又怎么了。我在赶图，脑子乱。",
+      "bubbles": 3,
+      "chars": 14,
+      "delays": [
+        500,
+        500,
+        500
+      ],
+      "total_delay": 1500,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 3
+      },
+      "elapsed_ms": 1968
+    },
+    {
+      "scenario": "conflict",
+      "variant": "rhythm_slow",
+      "sample": 0,
+      "text": "没有。图纸改到第三版，脑子有点乱。",
+      "bubbles": 1,
+      "chars": 17,
+      "delays": [
+        1310
+      ],
+      "total_delay": 1310,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1378
+    },
+    {
+      "scenario": "conflict",
+      "variant": "rhythm_slow",
+      "sample": 1,
+      "text": "没有。  \n就是今天图纸改得烦，脑子有点乱。",
+      "bubbles": 1,
+      "chars": 22,
+      "delays": [
+        1460
+      ],
+      "total_delay": 1460,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1330
+    },
+    {
+      "scenario": "question",
+      "variant": "baseline",
+      "sample": 0,
+      "text": "还没。刚进门，包都没放下。",
+      "bubbles": 1,
+      "chars": 13,
+      "delays": [
+        760
+      ],
+      "total_delay": 760,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1454
+    },
+    {
+      "scenario": "question",
+      "variant": "baseline",
+      "sample": 1,
+      "text": "吃了，楼下随便对付的。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1188
+    },
+    {
+      "scenario": "question",
+      "variant": "burst",
+      "sample": 0,
+      "text": "还没吃。\n刚到家。\n累。",
+      "bubbles": 3,
+      "chars": 12,
+      "delays": [
+        380,
+        380,
+        339
+      ],
+      "total_delay": 1099,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2149
+    },
+    {
+      "scenario": "question",
+      "variant": "burst",
+      "sample": 1,
+      "text": "还没。\n刚进门。\n累。",
+      "bubbles": 3,
+      "chars": 11,
+      "delays": [
+        360,
+        380,
+        339
+      ],
+      "total_delay": 1079,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1333
+    },
+    {
+      "scenario": "question",
+      "variant": "concise",
+      "sample": 0,
+      "text": "还没。刚进门。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1616
+    },
+    {
+      "scenario": "question",
+      "variant": "concise",
+      "sample": 1,
+      "text": "还没，刚进门。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        400
+      ],
+      "total_delay": 400,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1255
+    },
+    {
+      "scenario": "question",
+      "variant": "warm",
+      "sample": 0,
+      "text": "还没。刚进门，包都没放。",
+      "bubbles": 1,
+      "chars": 12,
+      "delays": [
+        740
+      ],
+      "total_delay": 740,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2035
+    },
+    {
+      "scenario": "question",
+      "variant": "warm",
+      "sample": 1,
+      "text": "刚进门，还没。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2038
+    },
+    {
+      "scenario": "question",
+      "variant": "mood",
+      "sample": 0,
+      "text": "吃了。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 2,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1738
+    },
+    {
+      "scenario": "question",
+      "variant": "mood",
+      "sample": 1,
+      "text": "还没。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1327
+    },
+    {
+      "scenario": "question",
+      "variant": "burst_short",
+      "sample": 0,
+      "text": "还没。\n刚进门。\n累。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2204
+    },
+    {
+      "scenario": "question",
+      "variant": "burst_short",
+      "sample": 1,
+      "text": "还没。\n刚进门。\n累。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2015
+    },
+    {
+      "scenario": "question",
+      "variant": "mirror",
+      "sample": 0,
+      "text": "没吃。刚到家。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1226
+    },
+    {
+      "scenario": "question",
+      "variant": "mirror",
+      "sample": 1,
+      "text": "还没。刚到家。",
+      "bubbles": 1,
+      "chars": 7,
+      "delays": [
+        640
+      ],
+      "total_delay": 640,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1370
+    },
+    {
+      "scenario": "question",
+      "variant": "late",
+      "sample": 0,
+      "text": "没呢。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1753
+    },
+    {
+      "scenario": "question",
+      "variant": "late",
+      "sample": 1,
+      "text": "还没。",
+      "bubbles": 1,
+      "chars": 3,
+      "delays": [
+        560
+      ],
+      "total_delay": 560,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1211
+    },
+    {
+      "scenario": "question",
+      "variant": "no_question",
+      "sample": 0,
+      "text": "还没。刚到家，懒得弄。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1337
+    },
+    {
+      "scenario": "question",
+      "variant": "no_question",
+      "sample": 1,
+      "text": "还没。刚进门，包都没放。",
+      "bubbles": 1,
+      "chars": 12,
+      "delays": [
+        740
+      ],
+      "total_delay": 740,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1424
+    },
+    {
+      "scenario": "question",
+      "variant": "warm_short",
+      "sample": 0,
+      "text": "还没。刚进门，有点累。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        720
+      ],
+      "total_delay": 720,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1235
+    },
+    {
+      "scenario": "question",
+      "variant": "warm_short",
+      "sample": 1,
+      "text": "还没。刚进门。你吃了吗？",
+      "bubbles": 1,
+      "chars": 12,
+      "delays": [
+        740
+      ],
+      "total_delay": 740,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1790
+    },
+    {
+      "scenario": "question",
+      "variant": "rhythm_single",
+      "sample": 0,
+      "text": "还没。刚进门，包都没放下。",
+      "bubbles": 1,
+      "chars": 13,
+      "delays": [
+        760
+      ],
+      "total_delay": 760,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1936
+    },
+    {
+      "scenario": "question",
+      "variant": "rhythm_single",
+      "sample": 1,
+      "text": "还没。刚进门，包都没放下。",
+      "bubbles": 1,
+      "chars": 13,
+      "delays": [
+        760
+      ],
+      "total_delay": 760,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1992
+    },
+    {
+      "scenario": "question",
+      "variant": "rhythm_burst2",
+      "sample": 0,
+      "text": "还没，刚到家。",
+      "bubbles": 2,
+      "chars": 7,
+      "delays": [
+        500,
+        500
+      ],
+      "total_delay": 1000,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1981
+    },
+    {
+      "scenario": "question",
+      "variant": "rhythm_burst2",
+      "sample": 1,
+      "text": "还没。刚进门，图纸还没改完。",
+      "bubbles": 2,
+      "chars": 14,
+      "delays": [
+        500,
+        500
+      ],
+      "total_delay": 1000,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1307
+    },
+    {
+      "scenario": "question",
+      "variant": "rhythm_burst3",
+      "sample": 0,
+      "text": "还没，刚进门。",
+      "bubbles": 2,
+      "chars": 7,
+      "delays": [
+        500,
+        500
+      ],
+      "total_delay": 1000,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2126
+    },
+    {
+      "scenario": "question",
+      "variant": "rhythm_burst3",
+      "sample": 1,
+      "text": "没吃。刚到家，还没顾上。",
+      "bubbles": 3,
+      "chars": 12,
+      "delays": [
+        500,
+        500,
+        500
+      ],
+      "total_delay": 1500,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 2339
+    },
+    {
+      "scenario": "question",
+      "variant": "rhythm_slow",
+      "sample": 0,
+      "text": "还没。刚进门，懒得弄。",
+      "bubbles": 1,
+      "chars": 11,
+      "delays": [
+        1130
+      ],
+      "total_delay": 1130,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1979
+    },
+    {
+      "scenario": "question",
+      "variant": "rhythm_slow",
+      "sample": 1,
+      "text": "还没。刚进门，包都没放下。",
+      "bubbles": 1,
+      "chars": 13,
+      "delays": [
+        1190
+      ],
+      "total_delay": 1190,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5,
+        "non_annoying": 5
+      },
+      "elapsed_ms": 1504
+    }
+  ]
+}

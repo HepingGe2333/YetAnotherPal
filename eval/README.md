@@ -387,3 +387,13 @@ v1 已不足以区分方案（单轮、词表天花板、不执行工具）。v2
 python3 -m eval.bench2.run --variants baseline,state_first,guidance,compact --samples 2 --concurrency 10
 python3 -m unittest discover -s eval/bench2/tests -t .
 ```
+
+## 用户体验探索（不生效）
+
+`eval/ux_explore.py` 用 DeepSeek 官方 API 比较不同的长度/连发/节奏/心情表达方案，
+只产出报告，不改产品。运行：
+
+```bash
+DEEPSEEK_API_KEY=... python3 -m eval.ux_explore --samples 2 --concurrency 10
+```
+报告：`eval/reports/ux-explore-*.md`。
