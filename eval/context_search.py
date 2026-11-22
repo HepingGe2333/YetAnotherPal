@@ -70,6 +70,8 @@ PROFILE_AXES: dict[str, list[str]] = {
     "state": ["full", "minimal", "mood_only"],
     "persona": ["full", "compact"],
     "hints": ["off", "on", "web"],
+    "router": ["off", "table", "strict"],
+    "tool_order": ["default", "web_first"],
 }
 BASE_PROFILE = {axis: values[0] for axis, values in PROFILE_AXES.items()}
 
@@ -77,6 +79,26 @@ BASE_PROFILE = {axis: values[0] for axis, values in PROFILE_AXES.items()}
 def _anti(level: str) -> str:
     rules = {"full": ANTI_FULL, "core": ANTI_CORE, "minimal": ANTI_MIN, "none": ANTI_NONE}[level]
     return ("# 别像 AI\n" + "\n".join("- " + rule for rule in rules)) if rules else ""
+
+
+ROUTER_TABLE = """# 工具选择
+- 价格/多少钱/新闻/今天发生的事：**第一步必须调用 web_search**；在 web_search 之前调用 memorize/recall 都算错。
+- 用户给了具体链接：第一步调用 web_fetch。
+- 过去对话的细节：调用 memorize；关于对方的长期事实：调用 remember。
+- 在忙/开会：只有**你自己**要忙才调用 set_activity；对方去开会只需回应。"""
+
+STRICT_ROUTER = """# 工具选择（硬规则）
+- 问题含「价格/多少钱/新闻/今天/最新」→ 只能先调用 web_search；禁止先调用 memorize、recall、think 或任何其它工具。
+- 问题含 http(s) 链接 → 只能先调用 web_fetch。
+- 违反上述顺序的回复视为错误。"""
+
+
+def _router(level: str) -> str:
+    if level == "table":
+        return ROUTER_TABLE
+    if level == "strict":
+        return STRICT_ROUTER
+    return ""
 
 
 def _tools(level: str, persona: dict[str, Any]) -> str:
@@ -97,7 +119,12 @@ def _native_tools(profile: dict[str, str], scenario: dict[str, Any], enabled: bo
         return []
     if not (scenario.get("persona") or {}).get("tools_enabled", True):
         return []
-    return tool_schema.openai_tools()
+    tools = tool_schema.openai_tools()
+    if profile.get("tool_order") == "web_first":
+        web = [t for t in tools if t.get("function", {}).get("name") in ("web_search", "web_fetch")]
+        rest = [t for t in tools if t not in web]
+        tools = web + rest
+    return tools
 
 
 def _state(scenario: dict[str, Any], level: str, guidance: str, mood: str) -> str:
@@ -166,6 +193,7 @@ def build_system(scenario: dict[str, Any], profile: dict[str, str]) -> str:
     anti = _anti(profile["anti"])
     tools = _tools(profile["tools"], p)
     hints = _hints(profile.get("hints", "off"))
+    router = _router(profile.get("router", "off"))
     memo = experiment._memory_block(scenario, profile["memory"])
     language = prompt._language_section(scenario)
     boundaries = prompt._boundaries_section()
@@ -177,7 +205,7 @@ def build_system(scenario: dict[str, Any], profile: dict[str, str]) -> str:
         sections = [state, persona, tools, hints, anti, memo, language, boundaries]
     else:  # compact
         sections = [persona, state, tools, hints, anti, memo, language, boundaries]
-    sections = [web_rule] + sections
+    sections = [web_rule] + ([router] if router else []) + sections
     return "\n\n".join(section for section in sections if section and section.strip()).strip()
 
 
