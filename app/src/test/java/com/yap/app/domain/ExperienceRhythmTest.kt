@@ -8,13 +8,13 @@ class ExperienceRhythmTest {
 
     @Test
     fun `首条延迟走共享契约的均值与随机波动`() {
-        // 0.15：均值 = clamp(0.3 + 字数 × 0.018, 0.3, 2.2) 秒；random = 0.5 时不抖动。
-        assertEquals(300L, ExperienceRhythm.typingDelayMillis(0))
-        assertEquals(318L, ExperienceRhythm.typingDelayMillis(1))
-        assertEquals(2_200L, ExperienceRhythm.typingDelayMillis(500))
+        // 0.15：均值 = clamp(0.6 + 字数 × 0.01, 0.6, 0.9) 秒；random = 0.5 时不抖动。
+        assertEquals(600L, ExperienceRhythm.typingDelayMillis(0))
+        assertEquals(610L, ExperienceRhythm.typingDelayMillis(1))
+        assertEquals(900L, ExperienceRhythm.typingDelayMillis(500))
         // 随机波动 ±35%：0.0 → 均值 ×0.65，1.0 → 均值 ×1.35。
-        assertEquals(195L, ExperienceRhythm.typingDelayMillis(0, random = { 0f }))
-        assertEquals(405L, ExperienceRhythm.typingDelayMillis(0, random = { 1f }))
+        assertEquals(390L, ExperienceRhythm.typingDelayMillis(0, random = { 0f }))
+        assertEquals(810L, ExperienceRhythm.typingDelayMillis(0, random = { 1f }))
         // 低唤醒/累比高唤醒慢；高唤醒明显更快。
         val low = ExperienceRhythm.typingDelayMillis(10, arousal = 0, lowEnergy = true)
         val high = ExperienceRhythm.typingDelayMillis(10, arousal = 5)

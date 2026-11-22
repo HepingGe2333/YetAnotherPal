@@ -291,7 +291,8 @@ class ToolCallOnlyTest {
         }.use { server ->
             val service = chatService(llmFor(server))
             send(service, "effort-1")
-            assertEquals(2, server.requests.size)
+            // think 1 轮 + 正文直出一轮 + 协议提醒重试 1 轮 = 3 次请求。
+            assertEquals(3, server.requests.size)
             assertEquals(
                 "主聊天默认 low",
                 "low",
@@ -302,11 +303,17 @@ class ToolCallOnlyTest {
                 "high",
                 requestBody(server, 1).stringAt("reasoning_effort")
             )
+            assertEquals(
+                "协议提醒重试仍属于同一轮（think 之后 → high）",
+                "high",
+                requestBody(server, 2).stringAt("reasoning_effort")
+            )
 
             // 下一轮重新开始：恢复默认 low（think 只影响它所在的那一轮）。
             send(service, "effort-2")
-            assertEquals(3, server.requests.size)
-            assertEquals("low", requestBody(server, 2).stringAt("reasoning_effort"))
+            // 正文直出 + 协议提醒重试各 1 次。
+            assertEquals(5, server.requests.size)
+            assertEquals("low", requestBody(server, 3).stringAt("reasoning_effort"))
         }
     }
 

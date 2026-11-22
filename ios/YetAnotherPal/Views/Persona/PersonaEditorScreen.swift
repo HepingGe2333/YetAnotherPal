@@ -64,6 +64,11 @@ struct PersonaEditorScreen: View {
     @State private var transcript = ""
     @State private var worldBusy = false
     @State private var styleBusy = false
+    /// 0.15.7「从最近聊天学习话风」：取样 + 总结中。
+    @State private var distillBusy = false
+    /// 0.15.7：总结好了、等用户点头的那一份（预览；**取消就什么都不写**）。
+    @State private var distillPreview: SpeechStyleSummary?
+    @State private var distillPreviewShown = false
     /// 他此刻在做什么（只读：`set_activity` 由他自己写，用户不能改）。
     @State private var activityLine = ""
     @State private var proactiveLevel = PersonaFieldLimits.proactiveLevelDefault
@@ -130,6 +135,8 @@ struct PersonaEditorScreen: View {
         // 保存成功的路径会把 `originalAvatarUri` 同步成新值，这里不会误删。
         .onDisappear(perform: discardUnsavedAvatar)
         .mfAlert($banner)
+        // 0.15.7：从最近聊天学话风的预览（取消 = 什么都不写，样本也不留在任何地方）。
+        .sheet(isPresented: $distillPreviewShown) { distillPreviewSheet }
     }
 
     // MARK: - 名字 / 一句话介绍
@@ -375,6 +382,32 @@ struct PersonaEditorScreen: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.bottom, 14)
+
+            // 0.15.7：不想粘贴记录的人也能学——用**他和这个人最近真的聊过的话**。
+            // 总结好之后先给一份预览，点「应用」才写库（取消什么都不改）。
+            if personaId != nil {
+                MFRowDivider(leadingInset: 0)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L("从最近聊天学习"))
+                            .font(.footnote.weight(.medium))
+                        Text(Lf("看他最近说的 %d 条消息，学他怎么说话。", StyleDistillationService.defaultMessageLimit))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    if distillBusy {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Button(L("学一下")) { Task { await distillStyle() } }
+                            .font(.footnote)
+                            .tint(accent)
+                            .disabled(styleBusy)
+                    }
+                }
+                .padding(.top, 10)
+            }
 
             if speechSource == .heuristic {
                 MFNote(
@@ -1405,6 +1438,132 @@ struct PersonaEditorScreen: View {
                 message: L("没有用上模型，按字面规则大致总结了一版；常用语只有重复出现的句子，可以手动补。")
             )
         }
+    }
+
+    // MARK: - 从最近聊天学习话风（0.15.7）
+
+    /// 取样 + 总结（**不写库**）：拿到结果就弹预览，用户点「应用」才生效。
+    ///
+    /// 为什么要有这一步而不是直接写：话风是「他是谁」的一部分，模型总结出来的东西
+    /// 偶尔会把对方的口头禅算到他头上（或者反过来）。先看一眼再决定，比事后回滚便宜。
+    private func distillStyle() async {
+        guard let personaId else { return }
+        guard let resolved = guidanceConfig() else {
+            banner = MFAlert(
+                title: L("还没有可用的 API 配置"),
+                message: L("先在设置里配一个模型，再来学话风；也可以手填风格与常用语。")
+            )
+            return
+        }
+        distillBusy = true
+        defer { distillBusy = false }
+        let service = StyleDistillationService.makeDefault(stores: env.stores)
+        let result = await service.distill(
+            personaId: personaId,
+            config: resolved.config,
+            model: resolved.model
+        )
+        switch result {
+        case .noMessages:
+            banner = MFAlert(
+                title: L("还没什么可学的"),
+                message: L("你们最近还没聊几句。等聊过一段再来，他会更像他自己。")
+            )
+        case .failed:
+            banner = MFAlert(
+                title: L("这次没学成"),
+                message: L("读聊天记录的时候出了点问题，稍后再试一次。")
+            )
+        case .ready(let summary):
+            distillPreview = summary
+            distillPreviewShown = true
+        }
+    }
+
+    /// 用户点了「应用」：写 `speechStyleJson` + 顶一版，然后把表单同步成新的那份。
+    ///
+    /// 同步这一步不能少：`initialSpeechStyleJson` 也要一起更新，否则用户接着点「保存」时
+    /// 会拿旧快照再写一次（版本号白跳两格）。
+    private func applyDistilledStyle(_ summary: SpeechStyleSummary) {
+        guard let personaId else { return }
+        let service = StyleDistillationService.makeDefault(stores: env.stores)
+        do {
+            let result = try service.apply(personaId: personaId, style: summary.style)
+            apply(style: summary.style)
+            initialSpeechStyleJson = result.json
+            distillPreviewShown = false
+            banner = MFAlert(
+                title: result.applied ? L("学会了他现在的说法") : L("跟现在一样"),
+                message: result.applied
+                    ? Lf("已经存好了，现在是他第 %d 版。", result.version)
+                    : L("总结出来的话风跟他现在的一样，就没有再改。")
+            )
+        } catch {
+            banner = MFAlert(title: L("没应用成"), message: error.localizedDescription)
+        }
+    }
+
+    /// 预览里的一行：小标题 + 正文（不用 `FieldCaption`：它的 `hint` 为空时会多留一行空白）。
+    private func previewRow(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// 预览面板：只显示**总结结果**，不显示聊天原文（隐私：§3.3）。
+    private var distillPreviewSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(L("他会这样说话"))
+                        .font(.system(.title3, design: .serif))
+                    if let summary = distillPreview {
+                        if !summary.usedModel {
+                            MFNote(
+                                text: L("这次没连上模型，是按字面规则粗略总结的；可以应用之后再手改。"),
+                                icon: "exclamationmark.triangle"
+                            )
+                        }
+                        if !summary.style.tone.isEmpty {
+                            previewRow(L("说话风格"), summary.style.tone)
+                        }
+                        if !summary.style.phrases.isEmpty {
+                            previewRow(L("常用语"),
+                                       summary.style.phrases.map { "「\($0)」" }.joined(separator: "、"))
+                        }
+                        if !summary.style.habits.isEmpty {
+                            previewRow(L("语言习惯"), summary.style.habits.joined(separator: "；"))
+                        }
+                        if !summary.style.avoid.isEmpty {
+                            previewRow(L("不要出现"), summary.style.avoid.joined(separator: "、"))
+                        }
+                        MFNote(text: L("只用了你们最近的聊天，原文不存、也不进日志。"))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+            }
+            .background(MFTheme.canvas(scheme).ignoresSafeArea())
+            .navigationTitle(L("从最近聊天学到的"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("取消")) { distillPreviewShown = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("应用")) {
+                        if let summary = distillPreview { applyDistilledStyle(summary) }
+                    }
+                    .fontWeight(.medium)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - 载入与保存

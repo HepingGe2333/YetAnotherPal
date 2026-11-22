@@ -896,6 +896,17 @@
     <string name="guidance_speech_phrase_add">Add</string>
     <string name="guidance_speech_sample_required">Paste a chat log first.</string>
     <string name="guidance_speech_summarize_failed">Summarizing failed; a rough local summary was used instead.</string>
+    <!-- 0.16 learn speech style from recent chats (samples are never stored; one request only) -->
+    <string name="guidance_speech_learn_from_chat">Learn from recent chats</string>
+    <string name="guidance_speech_learning">Reading your recent chats…</string>
+    <string name="guidance_speech_learn_hint">Uses the last 50 messages and leaves nothing behind. You get a preview first; nothing changes until you tap Apply.</string>
+    <string name="guidance_speech_learn_preview_title">Learned from what he said recently</string>
+    <string name="guidance_speech_learn_apply">Apply</string>
+    <string name="guidance_speech_learn_cancel">Cancel</string>
+    <string name="guidance_speech_learn_applied">Learned and saved into his speech style.</string>
+    <string name="guidance_speech_learn_empty">You two have barely talked yet; chat a little first.</string>
+    <string name="guidance_speech_learn_failed">That didn\'t work this time; try again later.</string>
+    <string name="guidance_speech_learn_need_save">Save this persona first, then learn how he talks.</string>
     <string name="persona_editor_guidance_section">World and speech</string>
     <string name="persona_editor_guidance_hint">Copied from a preset, or edited here; affects only this persona.</string>
     <!-- 0.12 persona prompt translation (spec/persona-translation) -->

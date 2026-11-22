@@ -30,8 +30,8 @@ object ExperienceRhythm {
     )
 
     /** 均值公式的三个常量（转发契约，保留旧名字给调用方/测试）。 */
-    const val TYPING_BASE_MS = 300L
-    const val TYPING_PER_CHAR_MS = 18L
+    const val TYPING_BASE_MS = 600L
+    const val TYPING_PER_CHAR_MS = 10L
     const val TYPING_LENGTH_CAP = 120
 
     /** 连发间隔能达到的最短/最长值：130ms .. 2025ms。 */

@@ -119,7 +119,11 @@ final class PromptBuilderTests: XCTestCase {
         let text = PromptBuilder.systemPrompt(SystemPromptInput(
             personaText: "人格", memoriesBlock: "", earlierMemoryBlock: "",
             moodBlock: "", moodPaceBlock: "", presenceBlock: "", moodNudgeBlock: "",
-            proactiveCapability: "P", toolsCapability: "T"
+            proactiveCapability: "P", toolsCapability: "T",
+            // 0.15.7 的「# 回复节奏」默认是**开着**的（产品行为），这里显式关掉：
+            // 这条用例只关心「空的可选段不能留下多余的空行或标题」；
+            // 回复节奏自己的位置/文案由 `ReplyPacingTests` 钉住。
+            replyPacingBlock: ""
         ))
         XCTAssertEqual(
             text,

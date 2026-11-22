@@ -121,6 +121,9 @@ final class ChatRhythmTests: XCTestCase {
     /// 模型看到用户消息的那一刻要写 `readAt`（§2.3）。
     func testModelSeeingMessageMarksItRead() async throws {
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         let all = try messages()
@@ -224,6 +227,9 @@ final class ChatRhythmTests: XCTestCase {
         XCTAssertEqual(try messages().filter { $0.role == .assistant }.count, 0, "没到阈值不该回")
 
         StubURLProtocol.enqueue(.sse(textDeltas: ["……几点了"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["……几点了"]))
         let events = try await collect(service.send(sessionId: sessionId, text: "起来啦"))
         XCTAssertFalse(events.contains { if case .noReply = $0 { return true } else { return false } })
 
@@ -244,6 +250,9 @@ final class ChatRhythmTests: XCTestCase {
         for text in ["喂", "醒醒"] {
             _ = try await collect(service.send(sessionId: sessionId, text: text))
         }
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "起来啦"))
         let userMessages = try messages().filter { $0.role == .user }

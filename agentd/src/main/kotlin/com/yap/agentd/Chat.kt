@@ -80,6 +80,15 @@ data class ReplyOutcome(
      */
     val legacy: Boolean = false,
     /**
+     * 0.15 UX：legacy 回退真正要落库的正文（可选）。
+     *
+     * 有协议提醒时，生成器会先让模型重试一次；如果重试仍然没调 `send_message`/`stay_silent`，
+     * 就回退到**重试时最新写的那段正文**（与 Android/iOS 一致）。[Chat.kt] 用它而不是
+     * `delta` 累加器，避免把提醒前后两段正文拼成一条消息。
+     * `null` = 老生成器/没有提醒：调用方仍然按 `delta` 拼正文（行为不变）。
+     */
+    val legacyText: String? = null,
+    /**
      * 0.15.1：这一轮模型**想**沉默（调用了 `stay_silent`；危机轮里 `defer_reply` 也算）。
      *
      * 危机轮里 `LlmReplyGenerator` 会把这两个工具拦下来不执行，所以 [suppressed] 可能仍然是
@@ -386,7 +395,7 @@ class ChatService(
                 .filter { it.isNotEmpty() }
                 // 连发是「每轮最多 4 条」，比纯文字按空行拆的 1–3 条宽一条。
                 .take(com.yap.agentd.tools.ToolExecutor.MAX_MESSAGES_PER_TURN)
-            else -> splitIntoMessages(builder.toString())
+            else -> splitIntoMessages(outcome.legacyText ?: builder.toString())
         }
         // 危机轮里「不落 assistant 正文」的语义被覆盖：已经流出的正文照用，没有正文就用安全提示。
         // 这条 override 同时决定 SSE 形状——必须有 `message.created`，且 done 带真实消息 id。

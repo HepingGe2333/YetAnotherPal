@@ -860,6 +860,9 @@ public final class ChatService {
                         webEnabled: config.webToolsEnabled,
                         language: personaLanguage
                     ),
+                    // 0.15.7「# 回复节奏」：默认只发一条、每条 ≤18 字、先接情绪再说自己。
+                    // 跟着人格语言走（中文人格读中文段，英文人格读英文段）。
+                    replyPacingBlock: ReplyPacing.section(language: personaLanguage),
                     // 「用对方的语言回答」= 人格语言（不是页面语言）。
                     languageDirective: PersonaLanguagePrompt.languageSection(language: personaLanguage)
                 )).map { ($0.section, $0.text) }
@@ -901,6 +904,17 @@ public final class ChatService {
             var toolRoundLimit = ExperienceContract.shared.clampToolRounds(requested: nil)
             var executed = Set<String>()
             var finalBody = ""
+            // 0.15.7 工具协议自动提醒（`ProtocolReminder`）：同一轮最多提醒 1 次。
+            //
+            // `protocolReminderTried` 是本轮已经用掉这次机会；`protocolReminderFallbackRaw`
+            // 是提醒**之前**模型写下的那段原文——只在「提醒之后它还是什么都没说」时兜底，
+            // 免得一次提醒把用户本来能看到的那句话弄丢。
+            var protocolReminderTried = false
+            var protocolReminderFallbackRaw = ""
+            // 提醒之后的**那一次**请求不往界面上推字：模型刚才那句话已经显示过了，
+            // 再推一遍会让同一句话闪两次（真机上是可见的抖动），而且还会再付一次打字延迟。
+            // 只在这一次请求内为 true；工具回路恢复正常流式。
+            var suppressStreaming = false
             // 0.16 思考强度（`spec/tool-call-agents/README.md` §2）：这一轮默认 low；
             // 模型调用 `think` 之后，这一轮的**后续请求**升到 high。
             // 变量在 `runGeneration` 里，所以下一轮（下一次生成）自然回到 low。
@@ -927,7 +941,8 @@ public final class ChatService {
                         buffer += delta
                         // 只把「还没写到的工具块」之前的部分推到界面，协议块永不示人。
                         let visible = ToolProtocol.visiblePrefix(buffer)
-                        if visible != shownText {
+                        // 提醒后的重试只做协议判定，不再推字（见 `suppressStreaming`）。
+                        if !suppressStreaming, visible != shownText {
                             // 0.14 §5：首字到达前先「打一会儿字」。
                             //
                             // 字数只能用**这一刻已经到达的字数**估（流式里没法预知整句长度）；
@@ -951,6 +966,8 @@ public final class ChatService {
                     throw MediaModality.map(error: error, hadAudio: sentAudio, hadVideo: sentVideo)
                 }
                 if Task.isCancelled { throw CancellationError() }
+                // 这一次请求的「别推字」窗口到此为止（工具回路照常流式）。
+                suppressStreaming = false
 
                 let (body, calls) = ToolProtocol.extract(buffer)
 
@@ -1139,7 +1156,42 @@ public final class ChatService {
                 }
 
                 if calls.isEmpty || round >= toolRoundLimit {
-                    finalBody = body.isEmpty ? (calls.isEmpty ? buffer.trimmingCharacters(in: .whitespacesAndNewlines) : "") : body
+                    let pendingBody = body.isEmpty
+                        ? (calls.isEmpty ? buffer.trimmingCharacters(in: .whitespacesAndNewlines) : "")
+                        : body
+                    // 0.15.7 工具协议自动提醒：这一轮**只有正文、没有任何工具调用**，
+                    // 而且还没有用 `send_message` 发出去过任何一条 —— 先提醒模型一次，
+                    // 让它把这句话用正确的方式说出来（见 `ProtocolReminder` 文件头）。
+                    //
+                    // 只提醒一次、且要求还有轮数余量（`round < toolRoundLimit`）：
+                    // 提醒之后总要留一次「带着 tools 重新请求」的机会，否则提醒没有意义。
+                    if calls.isEmpty,
+                       !pendingBody.isEmpty,
+                       !protocolReminderTried,
+                       sentCount == 0,
+                       producedMessage == nil,
+                       round < toolRoundLimit {
+                        protocolReminderTried = true
+                        protocolReminderFallbackRaw = buffer
+                        round += 1
+                        if let log {
+                            log("[chat] \(ProtocolReminder.logTag)：这一轮只输出了正文、没有调用工具，"
+                                + "先提醒模型一次（\(pendingBody.count) 字）")
+                        }
+                        // 正文当成 assistant 交回去，再追加一条**不可见**的 user 提醒：
+                        // 它只活在这一次请求的 `conversation` 里，不显示、不落库。
+                        conversation.append(WireMessage(role: "assistant", content: pendingBody))
+                        conversation.append(WireMessage(
+                            role: "user",
+                            content: ProtocolReminder.text(language: personaLanguage)
+                        ))
+                        // 界面上刚才那段文字**先留着**：提醒之后模型通常只是补一次工具调用；
+                        // 真的改了措辞时，收尾那句 `finalText != shownText` 会把它替换掉。
+                        // 这样既不会闪两次，也不会为同一句话付两次打字延迟。
+                        suppressStreaming = true
+                        continue
+                    }
+                    finalBody = pendingBody
                     break
                 }
                 round += 1
@@ -1272,7 +1324,21 @@ public final class ChatService {
                 ))
             }
 
-            let rawFinal = finalBody.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 0.15.7：提醒之后模型**什么都没说**（既没有工具调用，也没有正文）时，
+            // 用提醒之前那段正文兜底 —— 一次提醒不该让用户本来能看到的那句话消失。
+            // 提醒之后仍然只写正文的情况走上面那条 `finalBody`，用的是它最新写的那段。
+            let remindedOnly = finalBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !protocolReminderFallbackRaw.isEmpty
+                // 工具已经替他说过话（`send_message` / 表情）时不能用提醒前那段兜底：
+                // 否则同一句话会落成两条消息（用户看到两个一模一样的空气泡）。
+                && producedMessage == nil
+                && sentCount == 0
+            let rawFinal = remindedOnly
+                ? protocolReminderFallbackRaw
+                : finalBody.trimmingCharacters(in: .whitespacesAndNewlines)
+            if remindedOnly {
+                log?("[chat] \(ProtocolReminder.logTag)：提醒之后没有输出，按提醒前的正文收尾")
+            }
             // 主动唤醒提案（`yap-wake`）：代码块不能给用户看，解析成规则交回上层并落库。
             let extracted = ProactiveProtocol.extract(rawFinal)
             var finalText = extracted.body

@@ -10,6 +10,7 @@ import com.yap.app.domain.ExperienceContract.ContextSegment
  * ```
  * 1. 当前状态             （时间/活动/睡眠/心情）
  * 2. 引导                 （g12 有点防备 / g17 只聊此刻，按心情选）
+ * 2.5 回复节奏            （这一轮发几条、每条多长；与引导同属「这一轮怎么说」）
  * 3. 人设                 （身份/世界/话风/关系）
  * 4. 工具                 （「你能做什么」）
  * 5. 反 AI                （core 五条）
@@ -49,6 +50,8 @@ object ContextAssembly {
      *
      * @param state 当前状态段正文（时间/活动/睡眠/心情；不含标题）
      * @param guidance 「# 引导」整段（含标题；g12 / g17 由 [PromptBuilder.guidanceBlock] 选）
+     * @param rhythm 「# 回复节奏」整段（含标题；由 [PromptBuilder.rhythmBlock] 按人格语言给）。
+     *        默认为空：老调用方（人格卡预览、测试）不传就没有这一段，行为与 0.15 完全一致。
      * @param persona 人设四段（身份/世界/话风/关系）
      * @param tools 「# 你能做什么」整段
      * @param antiAi 「# 别像 AI」整段（core 五条）
@@ -61,6 +64,7 @@ object ContextAssembly {
     data class Inputs(
         val state: String = "",
         val guidance: String = "",
+        val rhythm: String = "",
         val persona: String = "",
         val tools: String = "",
         val antiAi: String = "",
@@ -131,10 +135,18 @@ object ContextAssembly {
         // 状态与引导共用 CURRENT_STATE 的比例上限（与服务端 `ContextAssembler` 同一口径）：
         // 引导是这一轮的调子，比多一行状态描述更值钱，所以先扣引导再给状态。
         val guidance = inputs.guidance.trim()
-        val stateBudget = if (guidance.isEmpty()) {
+        // 0.16 回复节奏：「这一轮怎么说」的第二段，和引导共用状态段的预算。
+        // 顺序固定为 引导 → 回复节奏，所以先扣引导、再扣节奏，最后才是状态正文。
+        val rhythmBlock = inputs.rhythm.trim()
+        val guidanceBudget = if (rhythmBlock.isEmpty()) {
             stateCap
         } else {
-            (stateCap - guidance.length - 2).coerceAtLeast(0)
+            (stateCap - rhythmBlock.length - 2).coerceAtLeast(0)
+        }
+        val stateBudget = if (guidance.isEmpty()) {
+            guidanceBudget
+        } else {
+            (guidanceBudget - guidance.length - 2).coerceAtLeast(0)
         }
         val stateText = clip(inputs.state, stateBudget)
         val persona = inputs.persona.trim()
@@ -143,7 +155,7 @@ object ContextAssembly {
         // 语言与边界固定收尾（边界必须最后一段）。
         val language = inputs.language.trim()
         val boundaries = inputs.boundaries.trim()
-        val fixedBlocks = fixedBlocks(stateText, guidance, persona, tools, antiAi, language, boundaries)
+        val fixedBlocks = fixedBlocks(stateText, guidance, rhythmBlock, persona, tools, antiAi, language, boundaries)
 
         val longText = clip(inputs.memo.longTerm, longCap)
         val shortText = clip(inputs.memo.shortTerm, shortCap)
@@ -211,6 +223,7 @@ object ContextAssembly {
                 add(PromptContract.Section.STATE + "\n" + stateText)
             }
             if (guidance.isNotBlank()) add(guidance)
+            if (rhythmBlock.isNotBlank()) add(rhythmBlock)
             if (persona.isNotBlank()) add(persona)
             if (tools.isNotBlank()) add(tools)
             if (antiAi.isNotBlank()) add(antiAi)
@@ -299,6 +312,7 @@ object ContextAssembly {
     private fun fixedBlocks(
         stateText: String,
         guidance: String,
+        rhythm: String,
         persona: String,
         tools: String,
         antiAi: String,
@@ -307,6 +321,7 @@ object ContextAssembly {
     ): List<String> = buildList {
         if (stateText.isNotBlank()) add(PromptContract.Section.STATE + "\n" + stateText)
         if (guidance.isNotBlank()) add(guidance)
+        if (rhythm.isNotBlank()) add(rhythm)
         if (persona.isNotBlank()) add(persona)
         if (tools.isNotBlank()) add(tools)
         if (antiAi.isNotBlank()) add(antiAi)

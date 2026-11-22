@@ -165,7 +165,8 @@ final class StaySilentTests: XCTestCase {
 
         // 第三轮：模型还想沉默 → 服务拒绝，回灌「这轮得说句话」，再生成一次。
         StubURLProtocol.enqueue(.sse(textDeltas: [silentBlock("第三轮")]))
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 「嗯」排两份：被逼出来的这句仍然是「只写正文」，0.15.7 起会先被协议提醒一次。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]), .sse(textDeltas: ["嗯"]))
         let events = try await collect(service.send(sessionId: sessionId, text: "你怎么了"))
         XCTAssertFalse(events.contains { if case .noReply = $0 { return true } else { return false } },
                        "第三轮不能再沉默")

@@ -247,16 +247,16 @@ object ExperienceContract {
      * 同样的字数永远等同样久，用户聊久了会觉得像进度条。人的打字间隔本来就有一个分布：
      * 越长的句子平均等越久，但每一次都不完全一样。
      */
-    const val TYPING_BASE_SECONDS: Double = 0.3
+    const val TYPING_BASE_SECONDS: Double = 0.6
 
     /** 每字增加的秒数（0.018 秒/字：100 字约 2.1 秒，接近真人敲 100 个汉字）。 */
-    const val TYPING_SECONDS_PER_CHAR: Double = 0.018
+    const val TYPING_SECONDS_PER_CHAR: Double = 0.01
 
     /** 首条延迟的均值下界。 */
-    const val TYPING_MIN_SECONDS: Double = 0.3
+    const val TYPING_MIN_SECONDS: Double = 0.6
 
     /** 首条延迟的均值上界：再长的消息也不该让人等 3 秒以上。 */
-    const val TYPING_MAX_SECONDS: Double = 2.2
+    const val TYPING_MAX_SECONDS: Double = 0.9
 
     /**
      * 连发之间的间隔：同一条公式，但更短（均值 `clamp(0.2 + 字数 × 0.012, 0.2, 1.5)` 秒）。
@@ -267,7 +267,7 @@ object ExperienceContract {
     const val BURST_GAP_BASE_SECONDS: Double = 0.2
     const val BURST_GAP_SECONDS_PER_CHAR: Double = 0.012
     const val BURST_GAP_MIN_SECONDS: Double = 0.2
-    const val BURST_GAP_MAX_SECONDS: Double = 1.5
+    const val BURST_GAP_MAX_SECONDS: Double = 0.9
 
     /**
      * 随机波动的幅度：±35%。

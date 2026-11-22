@@ -252,7 +252,8 @@ class MultimodalToolsTest {
             ) { sink.emit(it) }
 
             assertTrue("这一轮说了一句话", outcome.textLength > 0)
-            assertEquals(2, server.requests.size)
+            // 0.15：第一次正文直出会触发一次协议提醒重试（模型第二次仍写正文 → legacy）。
+            assertEquals(3, server.requests.size)
             // 第二次请求里有一条 user 消息，content 是数组，里面就是 input_audio。
             val second = TestSupport.parse(server.requests[1].body)
             val messages = second.arr("messages")

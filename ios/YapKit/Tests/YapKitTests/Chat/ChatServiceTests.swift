@@ -238,6 +238,9 @@ final class ChatServiceTests: XCTestCase {
         try seedSession()
         try seedKey()
         StubURLProtocol.enqueue(.sse("data: {\"choices\":[{\"delta\":{\"content\":\"嗯\"}}]}\n\ndata: [DONE]\n\n", splitEvery: 8))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse("data: {\"choices\":[{\"delta\":{\"content\":\"嗯\"}}]}\n\ndata: [DONE]\n\n", splitEvery: 8))
 
         _ = try await collect(service.send(sessionId: sessionId, text: "你在干嘛"))
         let system = try systemPrompt()
@@ -258,6 +261,9 @@ final class ChatServiceTests: XCTestCase {
     /// 没有世界/话风/活动时：不出现那几节，但不是崩——只有身份与边界。
     func testSystemPromptWithoutGuidanceStillHasIdentityAndBoundary() async throws {
         try seedReadySession()
+        StubURLProtocol.enqueue(.sse("data: {\"choices\":[{\"delta\":{\"content\":\"嗯\"}}]}\n\ndata: [DONE]\n\n", splitEvery: 8))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse("data: {\"choices\":[{\"delta\":{\"content\":\"嗯\"}}]}\n\ndata: [DONE]\n\n", splitEvery: 8))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
         let system = try systemPrompt()
@@ -287,6 +293,9 @@ final class ChatServiceTests: XCTestCase {
 
         """
         StubURLProtocol.enqueue(.sse(sse, splitEvery: 9))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(sse, splitEvery: 9))
 
         let events = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
@@ -311,9 +320,13 @@ final class ChatServiceTests: XCTestCase {
         XCTAssertEqual(session.lastMessagePreview, "你好呀")
         XCTAssertEqual(session.unreadCount, 1)
 
-        // 记账：一笔 CHAT，带 usage。
+        // 记账：两笔 CHAT，带 usage。
+        //
+        // 为什么是两笔：0.15.7 起「只写正文、没调用工具」的那一轮会先被**协议提醒**一次
+        // （同一轮最多 1 次），那也是一次真实的模型调用，钱要照记 —— 否则「协议违规则多少」
+        // 在用量页上看不出来。
         let usageRows = try stores.apiUsage.all()
-        XCTAssertEqual(usageRows.count, 1)
+        XCTAssertEqual(usageRows.count, 2)
         XCTAssertEqual(usageRows[0].kind, UsageKind.chat)
         XCTAssertEqual(usageRows[0].promptTokens, 120)
         XCTAssertEqual(usageRows[0].completionTokens, 9)
@@ -332,6 +345,9 @@ final class ChatServiceTests: XCTestCase {
     /// system 里该有的段落：人格、工具、主动唤醒、闲聊时也不该硬塞记忆块。
     func testSystemPromptContainsPersonaAndCapabilitiesInOrder() async throws {
         try seedReadySession()
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
@@ -356,6 +372,9 @@ final class ChatServiceTests: XCTestCase {
         persona.moodUpdatedAt = Int64(Date().timeIntervalSince1970 * 1000)
         try stores.personas.upsert(persona)
         StubURLProtocol.enqueue(.sse(textDeltas: ["嘿嘿"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嘿嘿"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "今天真好看"))
 
         let system = try systemPrompt()
@@ -370,6 +389,9 @@ final class ChatServiceTests: XCTestCase {
     func testMemoriesAreInjectedIntoSingleSystemPrompt() async throws {
         try seedReadySession()
         try seedMemory("他怕冷，冬天总穿两双袜子。")
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "今天好冷"))
 
@@ -391,6 +413,9 @@ final class ChatServiceTests: XCTestCase {
         try seedReadySession()
         try seedMemory("他怕冷。")
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "今天好冷"))
         XCTAssertTrue(try systemPrompt().contains("## 你记得的事"))
     }
@@ -402,6 +427,9 @@ final class ChatServiceTests: XCTestCase {
         session.historySummary = "上次聊到他搬家。"
         session.historySummarizedUpTo = 500
         try stores.sessions.upsert(session)
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "后来呢"))
         let system = try systemPrompt()
@@ -427,6 +455,9 @@ final class ChatServiceTests: XCTestCase {
         data: [DONE]
 
         """
+        StubURLProtocol.enqueue(.sse(first, splitEvery: 11), .sse(second, splitEvery: 11))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(first, splitEvery: 11), .sse(second, splitEvery: 11))
         tools.resultFor = { invocation in
             ToolResult(invocation: invocation, ok: true, summary: "想了想", contentForModel: "今天周四")
@@ -521,6 +552,9 @@ final class ChatServiceTests: XCTestCase {
 
         """
         StubURLProtocol.enqueue(.sse(first, splitEvery: 11), .sse(second, splitEvery: 11))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(first, splitEvery: 11), .sse(second, splitEvery: 11))
         tools.resultFor = { invocation in
             ToolResult(
                 invocation: invocation, ok: true, summary: "查了 3 个网页",
@@ -558,6 +592,9 @@ final class ChatServiceTests: XCTestCase {
         try seedReadySession()
         let block = #"{"name":"think","arguments":{"question":"要不要问"}}"#
         let first = "容我想想。\n```yap-tool\n\(block)\n```\n```yap-tool\n\(block)\n```"
+        StubURLProtocol.enqueue(.sse(textDeltas: [first]), .sse(textDeltas: ["想好了。"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: [first]), .sse(textDeltas: ["想好了。"]))
         let events = try await collect(service.send(sessionId: sessionId, text: "在吗"))
         XCTAssertEqual(tools.callCount, 1, "同一个 name+arguments 只执行一次")
@@ -693,6 +730,9 @@ final class ChatServiceTests: XCTestCase {
             ))
         }
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         let events = try await collect(service.send(sessionId: sessionId, text: "在吗"))
         XCTAssertEqual(background.compressionCalls, [sessionId])
         XCTAssertEqual(background.memoryCalls.map(\.sessionId), [sessionId])
@@ -705,6 +745,9 @@ final class ChatServiceTests: XCTestCase {
         try seedReadySession()
         service.setOpenSession(sessionId)
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
         XCTAssertEqual(try stores.sessions.byId(sessionId)?.unreadCount, 0)
         XCTAssertTrue(service.isSessionOpen(sessionId))
@@ -715,6 +758,9 @@ final class ChatServiceTests: XCTestCase {
     func testProactiveBlockIsStrippedAndReported() async throws {
         try seedReadySession()
         let text = "好呀，我记住啦。\n```myfriend-proactive\n{\"kind\":\"daily\",\"time\":\"22:30\",\"note\":\"每晚问候\"}\n```"
+        StubURLProtocol.enqueue(.sse(textDeltas: [text]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: [text]))
         let events = try await collect(service.send(sessionId: sessionId, text: "每天晚上十点半来问我一句"))
         let done = try XCTUnwrap(doneEvent(events))
@@ -736,6 +782,9 @@ final class ChatServiceTests: XCTestCase {
         service = makeService(media: media)
 
         let attachment = try media.saveImage(data: makeJPEG(width: 1200, height: 800), kind: .chatImage)
+        StubURLProtocol.enqueue(.sse(textDeltas: ["好看"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["好看"]))
 
         _ = try await collect(service.send(sessionId: sessionId, text: "", attachments: [attachment]))
@@ -780,6 +829,9 @@ final class ChatServiceTests: XCTestCase {
             let data = try makeJPEG(width: 120 + index, height: 120)
             attachments.append(try media.saveImage(data: data, kind: .chatImage))
         }
+        StubURLProtocol.enqueue(.sse(textDeltas: ["收到"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["收到"]))
 
         _ = try await collect(service.send(sessionId: sessionId, text: "都看看", attachments: attachments))
@@ -850,6 +902,9 @@ final class ChatServiceTests: XCTestCase {
     func testSendCheckedStartsAndPersistsUserMessage() async throws {
         try seedReadySession()
         StubURLProtocol.enqueue(.sse(textDeltas: ["在"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["在"]))
         guard case .started(let stream) = service.sendChecked(sessionId: sessionId, text: "在吗") else {
             return XCTFail("正常发送应当返回 .started")
         }
@@ -906,6 +961,9 @@ final class ChatServiceTests: XCTestCase {
             attachmentsJson: #"[{"uri":"file:///var/mobile/gone.jpg"}]"#
         ))
         StubURLProtocol.enqueue(.sse(textDeltas: ["那张图我这边看不到了"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["那张图我这边看不到了"]))
 
         _ = try await collect(service.send(sessionId: sessionId, text: "还在吗"))
 
@@ -941,6 +999,9 @@ final class ChatServiceTests: XCTestCase {
         stores.messages.queryObserver = { method, rows in reads.record(method, rows) }
         defer { stores.messages.queryObserver = nil }
 
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
@@ -1001,6 +1062,9 @@ final class ChatServiceTests: XCTestCase {
                          userCount: 15, at: 1)
         try seedMemory("他怕冷。")
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         let system = try systemPrompt()
@@ -1032,6 +1096,9 @@ final class ChatServiceTests: XCTestCase {
         persona.languageTag = "en"
         try stores.personas.upsert(persona)
         StubURLProtocol.enqueue(.sse(textDeltas: ["Sure."]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["Sure."]))
         _ = try await collect(service.send(sessionId: sessionId, text: "hi"))
 
         let system = try systemPrompt()
@@ -1043,6 +1110,9 @@ final class ChatServiceTests: XCTestCase {
 
     func testChinesePersonaKeepsChinesePrompt() async throws {
         try seedReadySession()
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
         let system = try systemPrompt()
@@ -1056,6 +1126,9 @@ final class ChatServiceTests: XCTestCase {
     /// `AUTO`（默认）+ DeepSeek 模型名 → 注入「# 工具使用」，而且排在工具能力清单之后。
     func testAutoProfileWithDeepSeekModelInjectsToolUsage() async throws {
         try seedReadySession()
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
@@ -1077,6 +1150,9 @@ final class ChatServiceTests: XCTestCase {
         config.model = "glm-4-flash"
         try stores.apiConfigs.upsert(config)
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         let system = try systemPrompt()
@@ -1093,6 +1169,9 @@ final class ChatServiceTests: XCTestCase {
         config.model = "glm-4-flash"
         try stores.apiConfigs.upsert(config)
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         XCTAssertTrue(try systemPrompt().contains(ModelProfilePrompt.section))
@@ -1105,6 +1184,9 @@ final class ChatServiceTests: XCTestCase {
         persona.modelProfile = .glm
         try stores.personas.upsert(persona)
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         XCTAssertFalse(try systemPrompt().contains(ModelProfilePrompt.section))
@@ -1116,6 +1198,9 @@ final class ChatServiceTests: XCTestCase {
         var persona = try XCTUnwrap(try stores.personas.byId(personaId))
         persona.languageTag = "en"
         try stores.personas.upsert(persona)
+        StubURLProtocol.enqueue(.sse(textDeltas: ["Sure."]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["Sure."]))
         _ = try await collect(service.send(sessionId: sessionId, text: "hi"))
 

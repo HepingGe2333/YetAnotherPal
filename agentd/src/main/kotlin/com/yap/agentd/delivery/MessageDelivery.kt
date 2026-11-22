@@ -38,7 +38,13 @@ class MessageDelivery(
     /** 恢复线程的轮询间隔（毫秒）。 */
     private val pollIntervalMs: Long = 250L,
     /** 恢复线程只处理「已经到点还没投递」的条目；前台路径会先 claim，避免重复。 */
-    private val recoveryGraceMs: Long = 0L
+    private val recoveryGraceMs: Long = 0L,
+    /**
+     * 「打字延迟」的随机源：返回 0..1，生产用真随机，测试传固定值（0.5 = 不抖动）。
+     *
+     * 0.15 起延迟公式是「均值 0.6–0.9 秒 × (1 ± 35%)」，没有随机源就无法做可复现的时序测试。
+     */
+    private val random: () -> Double = { kotlin.random.Random.nextDouble() }
 ) {
 
     /** 同一会话的投递串行化（`ReentrantLock` 可重入；同一时间只有一条在「输入」）。 */
@@ -70,7 +76,7 @@ class MessageDelivery(
         val mood = store.mood(personaId)
         var cursor = now
         return texts.map { text ->
-            cursor += TypingDelay.millis(text, mood)
+            cursor += TypingDelay.millis(text, mood, random)
             cursor
         }
     }

@@ -248,6 +248,10 @@ class ChatPromptBuilder(
         // 放在工具之后、记忆之前——先知道「能做什么」，再知道「别像谁」。
         insertAfterSection(sections, PromptContract.Section.CAPABILITIES, AntiAiCore.section())
 
+        // 0.15 UX「回复节奏」：工具段说怎么发，这段说发多少、每条多长、先说什么。
+        // 放在反 AI 之后、记忆之前，属于「怎么说话」的固定约束，不挤进人设/记忆的可变区。
+        insertAfterSection(sections, AntiAiCore.TITLE, ReplyRhythm.section())
+
         // ---- 第 1 段：当前状态（此刻 + 睡眠 + 心情直觉标签与三维）
         val currentState = buildString {
             if (stateSection.isNotBlank()) append(stateSection)

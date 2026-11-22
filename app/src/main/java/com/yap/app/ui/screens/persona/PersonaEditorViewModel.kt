@@ -14,6 +14,7 @@ import com.yap.app.data.repo.ApiConfigRepository
 import com.yap.app.data.repo.PersonaCardRepository
 import com.yap.app.data.repo.PersonaEvolutionRepository
 import com.yap.app.data.repo.PersonaRepository
+import com.yap.app.data.repo.StyleDistillationRepository
 import com.yap.app.data.repo.PersonaTranslationCoordinator
 import com.yap.app.data.repo.PersonaTranslationOutcome
 import com.yap.app.data.ai.SpeechStyleResult
@@ -141,6 +142,32 @@ data class PendingChangeUi(
     val reason: String
 )
 
+/**
+ * 「从最近聊天学习话风」的预览：只是**待确认**的一版，用户点「应用」之前不写库。
+ *
+ * [source] 是 `llm` / `heuristic`（来自 [SpeechStyleResult]），界面据此标一句
+ * 「模型总结」或「本地粗略总结」——不能让用户以为本地规则也是模型看过的。
+ */
+data class LearnedSpeechUi(
+    val tone: String,
+    val phrases: List<String>,
+    val habits: List<String>,
+    val avoid: List<String>,
+    val source: String,
+    /** 这次一共看了多少条消息：只在界面上说「看了最近 N 条」，不是落库字段。 */
+    val messageCount: Int
+) {
+    fun toStyle(): SpeechStyle = SpeechStyle(
+        tone = tone,
+        phrases = phrases,
+        habits = habits,
+        avoid = avoid
+    )
+
+    val isEmpty: Boolean get() = toStyle().isEmpty()
+    val isHeuristic: Boolean get() = source == SpeechStyleSource.HEURISTIC
+}
+
 data class PersonaEditorUiState(
     val personaId: String? = null,
     val form: PersonaForm = PersonaForm(),
@@ -158,6 +185,10 @@ data class PersonaEditorUiState(
     val currentActivity: PersonaActivity? = null,
     val worldFilling: Boolean = false,
     val speechSummarizing: Boolean = false,
+    /** 「从最近聊天学习话风」正在读聊天记录 / 等模型回话。 */
+    val speechLearning: Boolean = false,
+    /** 学到的预览：非 null 时编辑页弹一块「看一下再决定」的卡片，点「取消」不清库、只清它。 */
+    val learnedSpeech: LearnedSpeechUi? = null,
     // ---- 0.12 提示词翻译（spec/persona-translation） -------------------------
     /** 已缓存的译文语言；null = 还没有缓存。 */
     val translationLang: String? = null,
@@ -190,6 +221,8 @@ class PersonaEditorViewModel @Inject constructor(
     private val personaRepository: PersonaRepository,
     private val personaCardRepository: PersonaCardRepository,
     private val speechStyleSummarizer: SpeechStyleSummarizer,
+    /** 0.16 「从最近聊天学习话风」：只读最近聊天 + 一次总结，应用时再写库。 */
+    private val styleDistillationRepository: StyleDistillationRepository,
     private val worldPresetExpander: WorldPresetExpander,
     private val translationCoordinator: PersonaTranslationCoordinator,
     apiConfigRepository: ApiConfigRepository,
@@ -474,6 +507,141 @@ class PersonaEditorViewModel @Inject constructor(
                 )
             )
         }
+    }
+
+    /**
+     * 「从最近聊天学习话风」：读这个人格最近 50 条消息 → 一次总结 → 预览（不写库）。
+     *
+     * 四件事：
+     * 1. 新建人格还没 id：提示先保存（没有聊天记录可读）；
+     * 2. 加载中不重复触发（按钮变「正在看…」）；
+     * 3. 没有消息 / 这次没学成：各自一句人话，不伪装成功；
+     * 4. 学到就先**只**放进 [PersonaEditorUiState.learnedSpeech]，等用户点「应用」。
+     *
+     * 隐私：样本只在 [StyleDistillationRepository.distill] 内部活一次请求的时间，
+     * 这里既不落库也不打印（日志里也没有正文）。
+     */
+    fun learnSpeechFromChat() {
+        val current = _state.value
+        if (current.speechLearning) return
+        val id = current.personaId
+        if (id == null) {
+            viewModelScope.launch {
+                events.send(
+                    PersonaEditorEvent.Message(context.getString(R.string.guidance_speech_learn_need_save))
+                )
+            }
+            return
+        }
+        viewModelScope.launch {
+            _state.update { it.copy(speechLearning = true) }
+            val distilled = styleDistillationRepository.distill(id)
+            when (distilled) {
+                is StyleDistillationRepository.Distillation.Ready -> {
+                    val preview = LearnedSpeechUi(
+                        tone = distilled.style.tone,
+                        phrases = distilled.style.phrases,
+                        habits = distilled.style.habits,
+                        avoid = distilled.style.avoid,
+                        source = distilled.source,
+                        messageCount = distilled.messageCount
+                    )
+                    _state.update { it.copy(speechLearning = false, learnedSpeech = preview) }
+                }
+
+                StyleDistillationRepository.Distillation.NoMessages -> {
+                    _state.update { it.copy(speechLearning = false, learnedSpeech = null) }
+                    events.send(
+                        PersonaEditorEvent.Message(context.getString(R.string.guidance_speech_learn_empty))
+                    )
+                }
+
+                StyleDistillationRepository.Distillation.Failed -> {
+                    _state.update { it.copy(speechLearning = false, learnedSpeech = null) }
+                    events.send(
+                        PersonaEditorEvent.Message(context.getString(R.string.guidance_speech_learn_failed))
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * 预览里点「应用」：立刻把学到的说话方式写进人格（`speechStyleJson` + 一个版本）。
+     *
+     * 不是「填进表单等你再保存」：用户点的是「应用」，所以当场生效；表单也同步改成新值，
+     * 免得页面看起来还是旧话风（`initialForm` 一起改，避免出现「没动过却显示未保存」）。
+     */
+    fun applyLearnedSpeech() {
+        val current = _state.value
+        val preview = current.learnedSpeech ?: return
+        val id = current.personaId
+        if (id == null) {
+            _state.update { it.copy(learnedSpeech = null) }
+            viewModelScope.launch {
+                events.send(
+                    PersonaEditorEvent.Message(context.getString(R.string.guidance_speech_learn_need_save))
+                )
+            }
+            return
+        }
+        if (preview.isEmpty) {
+            _state.update { it.copy(learnedSpeech = null) }
+            return
+        }
+        val json = SpeechStyleCodec.encode(preview.toStyle())
+        viewModelScope.launch {
+            _state.update { it.copy(speechLearning = true) }
+            val result = personaRepository.applySpeechStyle(id, json)
+            if (result.isSuccess) {
+                val habitsText = preview.habits.joinToString("\n")
+                val avoidText = preview.avoid.joinToString("\n")
+                // 表单与「初始值」一起改：数据库已经是新话风了，页面不该还显示「有未保存的改动」。
+                _state.update { state ->
+                    state.copy(
+                        speechLearning = false,
+                        learnedSpeech = null,
+                        form = state.form.copy(
+                            speechTone = preview.tone,
+                            speechPhrases = preview.phrases,
+                            speechHabits = habitsText,
+                            speechAvoid = avoidText,
+                            speechSource = preview.source
+                        ),
+                        initialForm = state.initialForm.copy(
+                            speechTone = preview.tone,
+                            speechPhrases = preview.phrases,
+                            speechHabits = habitsText,
+                            speechAvoid = avoidText,
+                            speechSource = preview.source
+                        )
+                    )
+                }
+                events.send(
+                    PersonaEditorEvent.Message(context.getString(R.string.guidance_speech_learn_applied))
+                )
+            } else {
+                _state.update { it.copy(speechLearning = false) }
+                events.send(
+                    PersonaEditorEvent.Message(
+                        ErrorText.of(
+                            context,
+                            result.exceptionOrNull(),
+                            R.string.guidance_speech_learn_failed
+                        )
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * 预览里点「取消」：只关掉预览，**不写库**（连 `speechStyleJson` 都不碰）。
+     *
+     * 这是这个功能唯一的「什么都没发生」路径：取消一次不该留下任何痕迹。
+     */
+    fun dismissLearnedSpeech() {
+        _state.update { it.copy(learnedSpeech = null) }
     }
 
     /**

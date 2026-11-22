@@ -139,22 +139,22 @@ class ExperienceContractTest {
 
     @Test
     fun `typing base is clamped and grows with length`() {
-        assertEquals(0.3, ExperienceContract.typingBaseSeconds(0), 1e-9)
-        assertEquals(0.3, ExperienceContract.typingBaseSeconds(-5), 1e-9)
-        assertEquals(1.02, ExperienceContract.typingBaseSeconds(40), 1e-9)
-        assertEquals(2.1, ExperienceContract.typingBaseSeconds(100), 1e-9)
-        assertEquals(2.2, ExperienceContract.typingBaseSeconds(200), 1e-9)
-        assertEquals(2.2, ExperienceContract.typingBaseSeconds(10_000), 1e-9)
+        assertEquals(0.6, ExperienceContract.typingBaseSeconds(0), 1e-9)
+        assertEquals(0.6, ExperienceContract.typingBaseSeconds(-5), 1e-9)
+        assertEquals(0.9, ExperienceContract.typingBaseSeconds(40), 1e-9)
+        assertEquals(0.9, ExperienceContract.typingBaseSeconds(100), 1e-9)
+        assertEquals(0.9, ExperienceContract.typingBaseSeconds(200), 1e-9)
+        assertEquals(0.9, ExperienceContract.typingBaseSeconds(10_000), 1e-9)
     }
 
     @Test
     fun `typing delay applies symmetric 35 percent jitter around mean`() {
-        // 40 字：均值 1.02s；×0.65 = 0.663，×1.35 = 1.377。
-        assertEquals(663L, ExperienceContract.typingDelayMillis(40, 0.0) { 0.0 })
-        assertEquals(1_377L, ExperienceContract.typingDelayMillis(40, 0.0) { 1.0 })
-        assertEquals(1_020L, ExperienceContract.typingDelayMillis(40, 0.0) { 0.5 })
+        // 40 字：均值 0.9s；×0.65 = 0.585，×1.35 = 1.215。
+        assertEquals(585L, ExperienceContract.typingDelayMillis(40, 0.0) { 0.0 })
+        assertEquals(1_215L, ExperienceContract.typingDelayMillis(40, 0.0) { 1.0 })
+        assertEquals(900L, ExperienceContract.typingDelayMillis(40, 0.0) { 0.5 })
         // 默认 random = 0.5：不抖动，等于均值。
-        assertEquals(1_020L, ExperienceContract.typingDelayMillis(40))
+        assertEquals(900L, ExperienceContract.typingDelayMillis(40))
     }
 
     @Test
@@ -165,10 +165,10 @@ class ExperienceContractTest {
             val delay = ExperienceContract.typingDelayMillis(length, 0.0) { 0.5 }
             assertEquals("length=$length", (mean * 1000.0).toLong(), delay)
         }
-        // 边界：0 字最快 0.3×0.65=195ms，最长 2.2×1.35=2970ms（不再二次夹取）。
-        assertEquals(195L, ExperienceContract.typingDelayMillis(0, 0.0) { 0.0 })
-        assertEquals(405L, ExperienceContract.typingDelayMillis(0, 0.0) { 1.0 })
-        assertEquals(2_970L, ExperienceContract.typingDelayMillis(200, 0.0) { 1.0 })
+        // 边界：0 字最快 0.6×0.65=390ms，最长 0.9×1.35=1215ms（不再二次夹取）。
+        assertEquals(390L, ExperienceContract.typingDelayMillis(0, 0.0) { 0.0 })
+        assertEquals(810L, ExperienceContract.typingDelayMillis(0, 0.0) { 1.0 })
+        assertEquals(1_215L, ExperienceContract.typingDelayMillis(200, 0.0) { 1.0 })
     }
 
     @Test
@@ -177,27 +177,27 @@ class ExperienceContractTest {
         assertEquals(mean, ExperienceContract.typingDelayMillis(40, 0.0) { Double.NaN })
         assertEquals(mean, ExperienceContract.typingDelayMillis(40, 0.0) { Double.POSITIVE_INFINITY })
         // 越界随机值夹到 0/1，而不是外推。
-        assertEquals(663L, ExperienceContract.typingDelayMillis(40, 0.0) { -2.0 })
-        assertEquals(1_377L, ExperienceContract.typingDelayMillis(40, 0.0) { 2.0 })
+        assertEquals(585L, ExperienceContract.typingDelayMillis(40, 0.0) { -2.0 })
+        assertEquals(1_215L, ExperienceContract.typingDelayMillis(40, 0.0) { 2.0 })
     }
 
     @Test
     fun `mood adjustment is applied and clamped`() {
-        // 40 字：1.02 + 0.4 = 1.42s；1.02 − 0.4 = 0.62s。
-        assertEquals(1_420L, ExperienceContract.typingDelayMillis(40, 0.4) { 0.5 })
-        assertEquals(620L, ExperienceContract.typingDelayMillis(40, -0.4) { 0.5 })
+        // 40 字：均值封顶 0.9；+0.4 仍 0.9，−0.4 到 0.5→下界 0.6。
+        assertEquals(900L, ExperienceContract.typingDelayMillis(40, 0.4) { 0.5 })
+        assertEquals(600L, ExperienceContract.typingDelayMillis(40, -0.4) { 0.5 })
         // 越界修正夹到 ±0.4；NaN 当作 0。
-        assertEquals(1_420L, ExperienceContract.typingDelayMillis(40, 99.0) { 0.5 })
-        assertEquals(620L, ExperienceContract.typingDelayMillis(40, -99.0) { 0.5 })
-        assertEquals(1_020L, ExperienceContract.typingDelayMillis(40, Double.NaN) { 0.5 })
+        assertEquals(900L, ExperienceContract.typingDelayMillis(40, 99.0) { 0.5 })
+        assertEquals(600L, ExperienceContract.typingDelayMillis(40, -99.0) { 0.5 })
+        assertEquals(900L, ExperienceContract.typingDelayMillis(40, Double.NaN) { 0.5 })
     }
 
     @Test
     fun `typing delay never goes below the base floor`() {
-        // 长消息：均值到 2.2 后再加心情修正也不越过上界。
-        assertEquals(2_200L, ExperienceContract.typingDelayMillis(200, 0.4) { 0.5 })
-        // 短消息：均值到 0.3 后再减心情修正也不越过下界。
-        assertEquals(300L, ExperienceContract.typingDelayMillis(0, -0.4) { 0.5 })
+        // 长消息：均值到 0.9 后再加心情修正也不越过上界。
+        assertEquals(900L, ExperienceContract.typingDelayMillis(200, 0.4) { 0.5 })
+        // 短消息：均值到 0.6 后再减心情修正也不越过下界。
+        assertEquals(600L, ExperienceContract.typingDelayMillis(0, -0.4) { 0.5 })
     }
 
     @Test
@@ -211,7 +211,7 @@ class ExperienceContractTest {
         }
         assertEquals(0.2, ExperienceContract.burstGapBaseSeconds(0), 1e-9)
         assertEquals(0.8, ExperienceContract.burstGapBaseSeconds(50), 1e-9)
-        assertEquals(1.5, ExperienceContract.burstGapBaseSeconds(200), 1e-9)
+        assertEquals(0.9, ExperienceContract.burstGapBaseSeconds(200), 1e-9)
     }
 
     @Test
@@ -223,17 +223,17 @@ class ExperienceContractTest {
         // 边界：0 字 0.2s；200 字封顶 1.5s。
         assertEquals(130L, ExperienceContract.burstGapMillis(0, 0.0) { 0.0 })
         assertEquals(270L, ExperienceContract.burstGapMillis(0, 0.0) { 1.0 })
-        assertEquals(975L, ExperienceContract.burstGapMillis(200, 0.0) { 0.0 })
-        assertEquals(2_025L, ExperienceContract.burstGapMillis(200, 0.0) { 1.0 })
+        assertEquals(585L, ExperienceContract.burstGapMillis(200, 0.0) { 0.0 })
+        assertEquals(1_215L, ExperienceContract.burstGapMillis(200, 0.0) { 1.0 })
     }
 
     @Test
     fun `burst gap clamps mood and bad random`() {
         assertEquals(800L, ExperienceContract.burstGapMillis(50, Double.NaN) { 0.5 })
         assertEquals(800L, ExperienceContract.burstGapMillis(50, 0.0) { Double.NaN })
-        // 心情修正后夹在 0.2..1.5：0 字再快也停在 0.2s；200 字再慢也不超过 1.5s。
+        // 心情修正后夹在 0.2..0.9：0 字再快也停在 0.2s；200 字再慢也不超过 0.9s。
         assertEquals(200L, ExperienceContract.burstGapMillis(0, -0.4) { 0.5 })
-        assertEquals(1_500L, ExperienceContract.burstGapMillis(200, 0.4) { 0.5 })
+        assertEquals(900L, ExperienceContract.burstGapMillis(200, 0.4) { 0.5 })
     }
 
     // ------------------------------------------------------------------ 工具轮数

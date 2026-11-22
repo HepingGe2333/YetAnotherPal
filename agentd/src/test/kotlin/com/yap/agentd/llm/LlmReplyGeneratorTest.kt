@@ -85,20 +85,25 @@ class LlmReplyGeneratorTest {
         val sink = send(access(), """{"clientMessageId":"llm-1","content":"你在干嘛"}""")
 
         assertEquals(
-            listOf("accepted", "delta", "delta", "delta", "done"),
+            // 协议提醒会先清掉第一遍的临时文字（空 delta），再流重试的那一遍。
+            listOf("accepted", "delta", "delta", "delta", "delta", "delta", "delta", "delta", "done"),
             sink.types()
         )
-        assertEquals(listOf("在改图，", "第三版。", "晚点说。"), sink.events.filterIsInstance<SseEvent.Delta>().map { it.text })
+        assertEquals(
+            listOf("在改图，", "第三版。", "晚点说。", "", "在改图，", "第三版。", "晚点说。"),
+            sink.events.filterIsInstance<SseEvent.Delta>().map { it.text }
+        )
 
         val assistant = messages().last()
         assertEquals(MessageRole.ASSISTANT, assistant.role)
         assertEquals("在改图，第三版。晚点说。", assistant.content)
         assertEquals(MessageSource.CHAT, assistant.source)
-        assertEquals(30, assistant.promptTokens)
-        assertEquals(9, assistant.completionTokens)
+        // 0.15：正文直出会触发一次协议提醒重试，两次模型调用的用量都要记（提醒不落库但要计费）。
+        assertEquals(60, assistant.promptTokens)
+        assertEquals(18, assistant.completionTokens)
         val done = sink.firstOf<SseEvent.Done>()
         assertEquals(assistant.id, done.assistantMessageId)
-        assertEquals(9, done.usage.completionTokens)
+        assertEquals(18, done.usage.completionTokens)
     }
 
     @Test

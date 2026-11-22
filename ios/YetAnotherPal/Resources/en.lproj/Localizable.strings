@@ -1480,3 +1480,25 @@
 "连上了，转写服务能用。" = "Connected. The transcription service works.";
 "连上了（静音片段没有文字，正常）。" = "Connected (a silent clip has no text, which is expected).";
 "没有转写" = "No transcript";
+
+// 0.15.7: learn the speaking style from recent chats (persona editor).
+"从最近聊天学习" = "Learn from recent chats";
+"看他最近说的 %d 条消息，学他怎么说话。" = "Looks at his last %d messages to learn how he talks.";
+"学一下" = "Learn";
+"先在设置里配一个模型，再来学话风；也可以手填风格与常用语。" = "Set up a model in Settings first, then come back to learn his voice; you can also fill in the style by hand.";
+"还没什么可学的" = "Not much to learn yet";
+"你们最近还没聊几句。等聊过一段再来，他会更像他自己。" = "You two haven't talked much lately. Come back after a while and he'll sound more like himself.";
+"这次没学成" = "Learning failed this time";
+"读聊天记录的时候出了点问题，稍后再试一次。" = "Something went wrong while reading the chat history. Try again in a moment.";
+"学会了他现在的说法" = "Learned how he talks now";
+"跟现在一样" = "Same as now";
+"已经存好了，现在是他第 %d 版。" = "Saved. He's on version %d now.";
+"总结出来的话风跟他现在的一样，就没有再改。" = "The learned style matches his current one, so nothing was changed.";
+"没应用成" = "Couldn't apply it";
+"他会这样说话" = "This is how he talks";
+"这次没连上模型，是按字面规则粗略总结的；可以应用之后再手改。" = "No model was reachable this time, so this is a rough local summary; you can edit it after applying.";
+"只用了你们最近的聊天，原文不存、也不进日志。" = "Only your recent chats were used; the text isn't stored and never goes into logs.";
+"从最近聊天学到的" = "Learned from recent chats";
+"应用" = "Apply";
+"这个联系人已经不在了" = "That contact isn't here anymore";
+"这次学出来的是空的，先手填几条吧" = "Nothing came out of it this time — fill a few lines in by hand.";

@@ -70,7 +70,9 @@ class DeliveryTest {
         store = store,
         clock = clock.asClock(),
         presence = presence,
-        sleeper = sleeper()
+        sleeper = sleeper(),
+        // 0.15：延迟均值 × (1 ± 35%)；测试固定为 0.5，只看均值与累计时序。
+        random = { 0.5 }
     )
 
     private fun twoMessageGenerator(): ReplyGenerator = ReplyGenerator { _, _ ->
@@ -104,19 +106,32 @@ class DeliveryTest {
     // ------------------------------------------------------------------ 延迟公式
 
     @Test
-    fun `delay formula matches the spec and clamps to 04 through 40 seconds`() {
-        assertEquals(400L, TypingDelay.millis("", null))
-        assertEquals(450L, TypingDelay.millis("你好", null))
-        assertEquals(4000L, TypingDelay.millis("字".repeat(500), null))
-        // 低唤醒（很困）更慢；高唤醒更快；不愉快再慢一点。
+    fun `delay formula has a 06 to 09 second mean and a 35 percent jitter`() {
+        // 均值：0 字 0.6s、15 字 0.75s、30 字 0.9s（0.6 + 字数×0.01，夹在 0.6..0.9）。
+        assertEquals(600L, TypingDelay.millis("", null) { 0.5 })
+        assertEquals(620L, TypingDelay.millis("你好", null) { 0.5 })
+        assertEquals(750L, TypingDelay.millis("字".repeat(15), null) { 0.5 })
+        assertEquals(900L, TypingDelay.millis("字".repeat(30), null) { 0.5 })
+        assertEquals(900L, TypingDelay.millis("字".repeat(500), null) { 0.5 })
+        // 低唤醒（很困）更慢；高唤醒更快；不愉快再慢一点（修正后仍夹在均值区间内）。
         val sleepy = Mood(personaId = personaId, label = "困", intensity = 2, updatedAt = 1L, arousal = 0)
         val excited = Mood(personaId = personaId, label = "兴奋", intensity = 4, updatedAt = 1L, valence = 2, arousal = 5)
         val unhappy = Mood(personaId = personaId, label = "低落", intensity = 3, updatedAt = 1L, valence = -2, arousal = 2)
-        assertEquals(950L, TypingDelay.millis("你好", sleepy))
-        assertEquals(400L, TypingDelay.millis("你好", excited))
-        assertEquals(650L, TypingDelay.millis("你好", unhappy))
+        assertEquals(900L, TypingDelay.millis("你好", sleepy) { 0.5 })
+        assertEquals(600L, TypingDelay.millis("你好", excited) { 0.5 })
+        assertEquals(820L, TypingDelay.millis("你好", unhappy) { 0.5 })
         assertEquals(0.5, TypingDelay.moodAdjustment(sleepy), 0.0001)
         assertEquals(-0.4, TypingDelay.moodAdjustment(excited), 0.0001)
+
+        // ±35%：0.0 是下界、1.0 是上界、0.5 正好是均值。
+        val mean = TypingDelay.meanSeconds("字".repeat(13))
+        assertEquals(mean * 0.65, TypingDelay.seconds("字".repeat(13), null) { 0.0 }, 0.0001)
+        assertEquals(mean, TypingDelay.seconds("字".repeat(13), null) { 0.5 }, 0.0001)
+        assertEquals(mean * 1.35, TypingDelay.seconds("字".repeat(13), null) { 1.0 }, 0.0001)
+        assertEquals("坏随机源不抖动", mean, TypingDelay.seconds("字".repeat(13), null) { Double.NaN }, 0.0001)
+        assertTrue("所有长度都落在 0.6..0.9 秒的均值区间", (0..500 step 7).all {
+            TypingDelay.meanSeconds("字".repeat(it)) in TypingDelay.MEAN_MIN_SECONDS..TypingDelay.MEAN_MAX_SECONDS
+        })
     }
 
     @Test
@@ -127,8 +142,8 @@ class DeliveryTest {
         assertNotNull(online)
         assertEquals(2, online!!.size)
         assertTrue("第二条要排在第一条的 visibleAt 之后", online[1] > online[0])
-        assertEquals(1_000_000L + 450L, online[0])
-        assertEquals(online[0] + TypingDelay.millis("第二条消息", null), online[1])
+        assertEquals(1_000_000L + 620L, online[0])
+        assertEquals(online[0] + TypingDelay.millis("第二条消息", null) { 0.5 }, online[1])
 
         presence.reset()
         assertNull("离线不延迟", delivery.visibleAts(personaId, listOf("你好")))
@@ -292,7 +307,8 @@ class DeliveryTest {
             store = reopened,
             clock = clock.asClock(),
             presence = presence(mark = false),
-            sleeper = sleeper()
+            sleeper = sleeper(),
+            random = { 0.5 }
         )
         clock.now += 2_500L
         assertEquals("补发 1 条", 1, delivery.recoverDue())

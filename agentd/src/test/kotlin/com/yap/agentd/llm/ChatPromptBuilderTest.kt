@@ -86,6 +86,7 @@ class ChatPromptBuilderTest {
             "# 你们的关系",
             "# 你能做什么",
             "# 别像 AI",
+            "# 回复节奏",
             "# 边界"
         )
         val positions = titles.map { prompt.indexOf(it) }
@@ -181,6 +182,22 @@ class ChatPromptBuilderTest {
         assertFalse("建议那条删了", section.contains("不主动给建议"))
         assertFalse("stay_silent 那条删了（工具说明里有）", section.contains("不想说话时调用"))
         assertTrue("工具段仍然带着 stay_silent 的用法", prompt.contains("stay_silent"))
+    }
+
+    @Test
+    fun `the reply rhythm section pins one short emotional reply per turn`() {
+        val prompt = builder.systemPrompt(persona(), mood(), activity = null, now = now)
+        val section = prompt.substringAfter("# 回复节奏").substringBefore("\n\n# ")
+        val rules = section.lines().map { it.trim() }.filter { it.startsWith("- ") }
+
+        assertEquals("六条节奏规则：$rules", 6, rules.size)
+        assertTrue("默认只发 1 条", section.contains("默认只发 1 条"))
+        assertTrue("只有新信息才第 2 条", section.contains("只有真的带来新信息，才补第 2 条"))
+        assertTrue("每条 ≤18 字", section.contains("不超过 18 字"))
+        assertTrue("先接情绪再说自己", section.contains("先接住对方的情绪"))
+        assertTrue("不为连发拆句", section.contains("不要为了「连发」把一句话拆成几条"))
+        assertTrue("深夜/累更短但不只 4 字", section.contains("深夜或很累的时候更短") && section.contains("不要只剩四个字"))
+        assertEquals(ReplyRhythm.section(), "# 回复节奏\n" + rules.joinToString("\n"))
     }
 
     @Test

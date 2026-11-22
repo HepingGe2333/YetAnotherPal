@@ -158,6 +158,9 @@ final class ExperienceChatTests: XCTestCase {
 
         try unblockPersona()
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         guard case .started(let second) = service.sendChecked(sessionId: sessionId, text: "现在呢") else {
             return XCTFail("应当返回流")
         }
@@ -178,6 +181,9 @@ final class ExperienceChatTests: XCTestCase {
     // MARK: - 连发：空行拆分、逐条独立消息、间隔
 
     func testPlainReplyIsSplitIntoIndependentMessagesWithGaps() async throws {
+        StubURLProtocol.enqueue(.sse(textDeltas: ["今天有点忙。\n\n晚点找你。"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["今天有点忙。\n\n晚点找你。"]))
         let events = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
@@ -279,6 +285,9 @@ final class ExperienceChatTests: XCTestCase {
             personaId: personaId, sessionId: sessionId,
             thought: "他今天声音好轻", mood: MoodState(label: "平静", intensity: 2), at: now
         )
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 

@@ -18,9 +18,13 @@ import Foundation
 // 5 样本 85.3 vs 旧顺序 84.3，硬失败率 23.3% vs 26.7%）：
 //
 // ```
-// 当前状态（时间/活动/心情/引导）→ 人设（身份/世界/话风/关系）→ 工具
+// 当前状态（时间/活动/心情/引导）→ 人设（身份/世界/话风/关系）→ 工具（含回复节奏）
 // → 反 AI → 记忆/备忘录 → 语言 → 边界
 // ```
+//
+// 0.15.7「# 回复节奏」（`ReplyPacing`）**没有**新增一个段：它排在工具段里面、
+// 工具清单之后。理由是段数属于预算契约（`ExperienceContract` 的六段，parity 测试守着），
+// 而「发几条、每条多长」本来就是「话怎么发出去」的另一半，跟着工具段走最顺。
 //
 // 为什么「状态在前」：模型最早读到的应该是「现在是几点、他在做什么、他什么心情、
 // 这一轮怎么说话」——这些是**这一轮**的坐标；人设是常年不变的背景。先给坐标，
@@ -100,6 +104,13 @@ public struct SystemPromptInput {
     /// 空串 = 这一轮不注入（GLM 的 lean 档 / 老调用点 / 测试）。它是**工具段的一部分**
     /// （排在能力清单之后），所以段顺序与 `ContextAssemblerV2` 都不需要为它改一行。
     public var toolUsageBlock: String
+    /// 「# 回复节奏」段（0.15.7，`ReplyPacing`）：默认只发一条、每条 ≤18 字、先接情绪。
+    ///
+    /// 位置固定：**工具段之内、工具清单之后**（见 `PromptSection.text(.tools)`）。
+    /// 它与「你能做什么」是同一件事的两面——工具决定「话怎么发出去」，
+    /// 这一段决定「发出去的话长什么样」——所以紧挨着读，模型才会把两条规则连起来。
+    /// 空串 = 这一轮不加（只有测试与「提示词瘦身」的特殊场景会这么用）。
+    public var replyPacingBlock: String
     /// 「## 语言」小节的完整文本（模板由 App 层按界面语言从资源里取，见 `AppLanguage.languageDirective`）。
     /// 空串 = 不加这一节（老调用点与测试不用改签名）。
     public var languageDirective: String
@@ -125,6 +136,7 @@ public struct SystemPromptInput {
         proactiveCapability: String = ProactiveCapabilityPrompt.text,
         toolsCapability: String = ToolCatalog.capabilityPrompt(),
         toolUsageBlock: String = "",
+        replyPacingBlock: String = ReplyPacing.section(language: .zh),
         languageDirective: String = ""
     ) {
         self.personaText = personaText
@@ -147,6 +159,7 @@ public struct SystemPromptInput {
         self.proactiveCapability = proactiveCapability
         self.toolsCapability = toolsCapability
         self.toolUsageBlock = toolUsageBlock
+        self.replyPacingBlock = replyPacingBlock
         self.languageDirective = languageDirective
     }
 }
@@ -180,7 +193,7 @@ public enum PromptSection: String, CaseIterable, Sendable {
     case guidance
     /// 人设：身份 / 世界 / 话风 / 关系。
     case persona
-    /// 主动唤醒能力 + 工具清单。
+    /// 主动唤醒能力 + 工具清单 + 回复节奏（0.15.7：默认只发一条、每条 ≤18 字）。
     case tools
     /// 反 AI 味（core 五条）。
     case antiAI
@@ -219,7 +232,8 @@ public enum PromptSection: String, CaseIterable, Sendable {
             ])
         case .tools:
             return PromptBuilder.stack([
-                input.proactiveCapability, input.toolsCapability, input.toolUsageBlock
+                input.proactiveCapability, input.toolsCapability,
+                input.toolUsageBlock, input.replyPacingBlock
             ])
         case .antiAI:
             return input.antiAIPrompt

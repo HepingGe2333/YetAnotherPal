@@ -83,6 +83,9 @@ class CrisisTwoStageTest {
                 }
             } else if (chatCalls.getAndIncrement() == 0) {
                 exchange.sse(chatFrames)
+            } else if (exchange.request.body.contains("系统提醒")) {
+                // 0.15 协议提醒：模型被提醒后重新说了一遍原本那句话（假服务端不发明新台词）。
+                exchange.sse(chatFrames)
             } else {
                 exchange.sse(listOf(FakeLlmServer.chunk("好。"), FakeLlmServer.DONE))
             }
@@ -122,10 +125,12 @@ class CrisisTwoStageTest {
         fakeServer(riskJson = """{"risk":true,"reason":"不该被问到"}""").use { server ->
             val sink = send(chatService(server), "在吗，今天有点累", "ordinary-1")
 
-            assertEquals("普通聊天只有一次模型请求（没有判定请求）", 1, server.requests.size)
+            // 0.15：正文直出会先触发一次协议提醒重试；普通聊天仍然不请求判定器。
+            assertEquals("聊天 + 协议提醒重试 = 2 次请求（没有判定请求）", 2, server.requests.size)
             assertEquals(0, classifierRequests(server).size)
             assertEquals("我在，你身边有人吗？", assistantMessages().single().content)
-            assertEquals("我在，你身边有人吗？", sink.text())
+            assertEquals("我在，你身边有人吗？", assistantMessages().single().content)
+            assertTrue("最新一遍的正文也要流给客户端", sink.text().endsWith("我在，你身边有人吗？"))
             assertFalse(sink.firstOf<SseEvent.Done>().silent)
         }
     }
@@ -158,7 +163,8 @@ class CrisisTwoStageTest {
             assertFalse("不能追加安全提示", sink.text().contains("120"))
             assertTrue(sink.events.none { it is SseEvent.MessageCreated })
             assertEquals(1, classifierRequests(server).size)
-            assertEquals("判定 + 生成 = 2 次请求", 2, server.requests.size)
+            // 判定 1 + 生成 1 + 协议提醒重试 1 = 3 次请求。
+            assertEquals("判定 + 生成 + 协议提醒重试 = 3 次请求", 3, server.requests.size)
         }
     }
 
@@ -296,7 +302,8 @@ class CrisisTwoStageTest {
             // 第二条普通消息：历史里有危机词，但不能再触发判定（只判最近一条）。
             send(service, "在吗", "latest-2")
             assertEquals("历史里的危机词不该让普通消息进判定", 1, classifierRequests(server).size)
-            assertEquals("第二条只有生成请求", 3, server.requests.size)
+            // 第一条：判定 1 + 聊天 1 + 提醒重试 1；第二条：聊天 1 + 提醒重试 1。
+            assertEquals("两条消息共 5 次请求（判定只发生一次）", 5, server.requests.size)
         }
     }
 

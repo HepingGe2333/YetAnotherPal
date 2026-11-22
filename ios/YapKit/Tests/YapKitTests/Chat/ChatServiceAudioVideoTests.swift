@@ -135,6 +135,9 @@ final class ChatServiceAudioVideoTests: XCTestCase {
             )]
         )
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯，我在听"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯，我在听"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "听我说", attachments: [audio]))
 
         // 1) 落库：kind/durationMs 都在（界面据此画语音气泡）。
@@ -166,6 +169,9 @@ final class ChatServiceAudioVideoTests: XCTestCase {
         let oldAudio = try makeAudio(durationMs: 9_000)
         try seedUserAudioMessage(oldAudio, at: 1)
         mediaPartsBuilder.partsToReturn = nil
+        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "刚说到哪了"))
 
@@ -249,6 +255,9 @@ final class ChatServiceAudioVideoTests: XCTestCase {
             .sse(textDeltas: ["我听听。\n```yap-tool\n{\"name\":\"listen\",\"arguments\":{}}\n```"]),
             .sse(textDeltas: ["听完了，你说得挺轻的。"])
         )
+        // 0.15.7 工具协议提醒：最后一次「只写正文」会被提醒一次、再请求一次，
+        // 同一段正文再排一份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["听完了，你说得挺轻的。"]))
         tools.resultFor = { invocation in
             ToolResult(
                 invocation: invocation,
@@ -261,7 +270,8 @@ final class ChatServiceAudioVideoTests: XCTestCase {
         }
         _ = try await collect(service.send(sessionId: sessionId, text: "听听我刚才说的"))
 
-        XCTAssertEqual(StubURLProtocol.recordedBodies.count, 2)
+        XCTAssertEqual(StubURLProtocol.recordedBodies.count, 3,
+                       "工具一轮 + 回灌一轮 + 提醒后的重试一轮")
         let second = try requestMessages(at: 1)
         let reinjected = try XCTUnwrap(second.first { message in
             (message["content"] as? [[String: Any]])?.contains {

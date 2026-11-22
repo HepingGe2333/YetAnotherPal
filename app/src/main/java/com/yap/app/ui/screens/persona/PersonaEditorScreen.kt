@@ -353,10 +353,15 @@ fun PersonaEditorScreen(
                         currentActivity = state.currentActivity,
                         worldFilling = state.worldFilling,
                         speechSummarizing = state.speechSummarizing,
+                        speechLearning = state.speechLearning,
+                        learnedSpeech = state.learnedSpeech,
                         onUpdate = viewModel::update,
                         onFillWorld = viewModel::fillWorldWithAi,
                         onSummarizeSpeech = viewModel::summarizeSpeech,
-                        onClearSpeech = viewModel::clearSpeech
+                        onClearSpeech = viewModel::clearSpeech,
+                        onLearnSpeech = viewModel::learnSpeechFromChat,
+                        onApplyLearnedSpeech = viewModel::applyLearnedSpeech,
+                        onDismissLearnedSpeech = viewModel::dismissLearnedSpeech
                     )
 
                     // 0.12 提示词翻译（spec/persona-translation §4/§7）：显示缓存状态 + 手动重译。
@@ -953,10 +958,15 @@ private fun PersonaGuidanceSection(
     currentActivity: PersonaActivity?,
     worldFilling: Boolean,
     speechSummarizing: Boolean,
+    speechLearning: Boolean,
+    learnedSpeech: LearnedSpeechUi?,
     onUpdate: ((PersonaForm) -> PersonaForm) -> Unit,
     onFillWorld: () -> Unit,
     onSummarizeSpeech: () -> Unit,
-    onClearSpeech: () -> Unit
+    onClearSpeech: () -> Unit,
+    onLearnSpeech: () -> Unit,
+    onApplyLearnedSpeech: () -> Unit,
+    onDismissLearnedSpeech: () -> Unit
 ) {
     SectionLabel(stringResource(R.string.persona_editor_guidance_section))
     Text(
@@ -992,6 +1002,14 @@ private fun PersonaGuidanceSection(
         onHabitsText = { value -> onUpdate { it.copy(speechHabits = value) } },
         onAvoidText = { value -> onUpdate { it.copy(speechAvoid = value) } }
     )
+    // 0.16：不用去别的 App 复制聊天记录了——他和你的这段对话本身就是最像他的语料。
+    SpeechLearnSection(
+        learning = speechLearning,
+        learned = learnedSpeech,
+        onLearn = onLearnSpeech,
+        onApply = onApplyLearnedSpeech,
+        onDismiss = onDismissLearnedSpeech
+    )
     Spacer(Modifier.height(14.dp))
     SectionLabel(stringResource(R.string.persona_editor_activity_section))
     Text(
@@ -1012,6 +1030,120 @@ private fun PersonaGuidanceSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, start = 4.dp)
         )
+    }
+}
+
+/**
+ * 「从最近聊天学习话风」：一个按钮 + 一块预览。
+ *
+ * 产品上的一句话：他和你聊过的话本身就是最像他的语料，不该让用户再去别的 App 里复制粘贴。
+ * 所以这里只有三步——点一下（读最近聊天、一次总结）、看一眼（tone / 常用语 / 习惯 / 不要的表达，
+ * 并标明是模型总结还是本地兜底）、决定（应用才写库；取消等于什么都没发生）。
+ *
+ * 隐私文案说清楚：样本不会留下记录，只有这一版结果会存进他的人设。
+ */
+@Composable
+private fun SpeechLearnSection(
+    learning: Boolean,
+    learned: LearnedSpeechUi?,
+    onLearn: () -> Unit,
+    onApply: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Spacer(Modifier.height(10.dp))
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        SecondaryButton(
+            text = if (learning) {
+                stringResource(R.string.guidance_speech_learning)
+            } else {
+                stringResource(R.string.guidance_speech_learn_from_chat)
+            },
+            onClick = onLearn,
+            enabled = !learning,
+            loading = learning,
+            modifier = Modifier.weight(1f)
+        )
+    }
+    Spacer(Modifier.height(6.dp))
+    Text(
+        stringResource(R.string.guidance_speech_learn_hint),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 4.dp)
+    )
+    if (learned == null) return
+    Spacer(Modifier.height(10.dp))
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                stringResource(R.string.guidance_speech_learn_preview_title),
+                style = MaterialTheme.typography.labelLarge
+            )
+            Spacer(Modifier.height(6.dp))
+            // 来源必须写清楚：模型总结 / 本地粗略总结（本地兜底不是「模型看过」）。
+            Text(
+                if (learned.isHeuristic) {
+                    stringResource(R.string.guidance_speech_source_heuristic)
+                } else {
+                    stringResource(R.string.guidance_speech_source_llm)
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (learned.tone.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.guidance_speech_tone_label) + "：" + learned.tone,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            if (learned.phrases.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.guidance_speech_phrases_label),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    learned.phrases.joinToString("、") { "「$it」" },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            listOf(
+                stringResource(R.string.guidance_speech_habits_label) to learned.habits,
+                stringResource(R.string.guidance_speech_avoid_label) to learned.avoid
+            ).forEach { (label, lines) ->
+                if (lines.isEmpty()) return@forEach
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(lines.joinToString("；"), style = MaterialTheme.typography.bodyMedium)
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SecondaryButton(
+                    text = stringResource(R.string.guidance_speech_learn_cancel),
+                    onClick = onDismiss,
+                    enabled = !learning,
+                    modifier = Modifier.weight(1f)
+                )
+                PrimaryButton(
+                    text = stringResource(R.string.guidance_speech_learn_apply),
+                    onClick = onApply,
+                    enabled = !learning,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
     }
 }
 

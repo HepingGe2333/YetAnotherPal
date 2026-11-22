@@ -251,6 +251,7 @@ object PromptBuilder {
     fun system(input: Inputs): String = buildString {
         append(stateBodyWithHeading(input))
         appendSection(guidanceBlock(input))
+        appendSection(rhythmBlock(input))
         appendSection(personaBlock(input))
         appendSection(toolsBlock(input))
         appendSection(antiAiSection(input.language))
@@ -372,6 +373,67 @@ object PromptBuilder {
             lines.forEachIndexed { index, line ->
                 if (index == 0) append("\n").append(line) else append("\n- ").append(line)
             }
+        }
+    }
+
+    // ------------------------------------------------------------------ 回复节奏
+
+    /**
+     * 「# 回复节奏」段标题（0.16 的「像人」节奏，与工具协议同一条线）。
+     *
+     * 不在 `scaffold.json` 里，所以单独一段、不进 [Scaffold.VALUES_BY_KEY]；位置固定：
+     * 紧跟「# 引导」之后、人设之前——先定这一轮的调子（引导），再定这一轮**发几条、多长**
+     * （节奏），然后才是「他是谁」。两段都回答「这一轮怎么说」，连读最自然；
+     * 它们也紧挨着工具段（`# 你能做什么`），发消息的规则与工具协议在提示词里是一路的。
+     */
+    const val SECTION_RHYTHM = "# 回复节奏"
+
+    /** 英文人格的节奏段标题（与 [SECTION_RHYTHM] 对应）。 */
+    const val SECTION_RHYTHM_EN = "# Reply pacing"
+
+    /**
+     * 节奏段的中文条目（逐条可断言）。
+     *
+     * 为什么这几条：0.16 起每一句话都要走 `send_message`，于是「一轮几条」变成模型可以直接
+     * 决定的事——它很容易为了显得热络而连发、或者把一句话拆成两条。这五条把「像人」的默认值
+     * 写死：一条、短、先接情绪、不拆句、深夜更短但不敷衍。
+     *
+     * 18 字是**提示词层面的目标**，不是硬限制：`send_message` 的硬上限仍是
+     * [ExperienceRhythm.MAX_SEND_MESSAGE_CHARS]（120 字），超了要能把话说完而不是被丢掉。
+     */
+    val RHYTHM_ZH: List<String> = listOf(
+        "默认只发 1 条。",
+        "只有真的有新信息（新想法、新问题、没说完的那半句）才发第 2 条。",
+        "每条不超过 18 个字，短句更像随口说的。",
+        "先接住对方的情绪，再说你自己的事。",
+        "不要为了发两条而把一句话拆开。",
+        "深夜、或者你累了，可以更短，但别只回四个字。"
+    )
+
+    /** 节奏段的英文条目（与 [RHYTHM_ZH] 一一对应，非中文人格用）。 */
+    val RHYTHM_EN: List<String> = listOf(
+        "Send one message by default.",
+        "Only send a second when it truly adds something new (a new thought, a question, the rest of a sentence).",
+        "Keep each message under 18 characters; short lines sound more offhand.",
+        "Acknowledge their feeling first, then say your own part.",
+        "Don't split one sentence into two just to send more.",
+        "Late at night or when tired you can be shorter, but never reply with just four characters."
+    )
+
+    /**
+     * 「# 回复节奏」段（按人格语言选）。
+     *
+     * 纯函数、不读时钟：同一个「他」在任何时刻拿到的节奏规则都一样；深夜更短那一条
+     * 由他自己按状态段里的时间判断，这里只给规则，不在这里做时间分支——否则同一份提示词
+     * 会因为「现在几点」出现两种字面，契约测试就没法逐字钉住。
+     */
+    fun rhythmBlock(input: Inputs): String {
+        val zh = input.language == PromptLanguage.ZH
+        val title = if (zh) SECTION_RHYTHM else SECTION_RHYTHM_EN
+        val lines = if (zh) RHYTHM_ZH else RHYTHM_EN
+        return buildString {
+            append(title)
+            lines.forEach { line -> append("\n- ").append(line) }
         }
     }
 

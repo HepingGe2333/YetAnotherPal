@@ -885,6 +885,17 @@
     <string name="guidance_speech_phrase_add">添加</string>
     <string name="guidance_speech_sample_required">先粘贴一段聊天记录。</string>
     <string name="guidance_speech_summarize_failed">总结失败，已用本地规则粗略总结。</string>
+    <!-- 0.16 从最近聊天学习话风（样本不落库、只用一次请求） -->
+    <string name="guidance_speech_learn_from_chat">从最近聊天学习话风</string>
+    <string name="guidance_speech_learning">正在看你们最近的聊天…</string>
+    <string name="guidance_speech_learn_hint">取最近 50 条聊天，看完不会留下记录；学到的先给你看，点了「应用」才算数。</string>
+    <string name="guidance_speech_learn_preview_title">从他最近说的话里学到的</string>
+    <string name="guidance_speech_learn_apply">应用</string>
+    <string name="guidance_speech_learn_cancel">取消</string>
+    <string name="guidance_speech_learn_applied">学会了，已经存进他的话风里。</string>
+    <string name="guidance_speech_learn_empty">你们还没怎么聊过，先聊几句再来。</string>
+    <string name="guidance_speech_learn_failed">这次没学成，过会儿再试一次。</string>
+    <string name="guidance_speech_learn_need_save">先保存这个人，再来学他说话。</string>
     <string name="persona_editor_guidance_section">世界与话风</string>
     <string name="persona_editor_guidance_hint">可以从预设带入，也可以在这里改；只会影响这个人。</string>
     <!-- 0.12 人格提示词翻译（spec/persona-translation） -->

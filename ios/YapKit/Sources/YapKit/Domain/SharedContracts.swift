@@ -175,10 +175,10 @@ public final class ExperienceContract {
 
     // MARK: 消息节奏
 
-    public static let TYPING_BASE_SECONDS: Double = 0.3
-    public static let TYPING_SECONDS_PER_CHAR: Double = 0.018
-    public static let TYPING_MIN_SECONDS: Double = 0.3
-    public static let TYPING_MAX_SECONDS: Double = 2.2
+    public static let TYPING_BASE_SECONDS: Double = 0.6
+    public static let TYPING_SECONDS_PER_CHAR: Double = 0.01
+    public static let TYPING_MIN_SECONDS: Double = 0.6
+    public static let TYPING_MAX_SECONDS: Double = 0.9
     public static let BURST_GAP_BASE_SECONDS: Double = 0.2
     public static let BURST_GAP_SECONDS_PER_CHAR: Double = 0.012
     public static let BURST_GAP_MIN_SECONDS: Double = 0.2

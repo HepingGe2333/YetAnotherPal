@@ -63,6 +63,9 @@ final class ChatToolFeedbackTests: XCTestCase {
             Self.sse(["嗯，我记一下。\n```yap-tool\n\(block)\n```"]),
             Self.sse(["记住了，天冷的时候我会提醒你。"])
         )
+        // 0.15.7 工具协议提醒：最后一次「只写正文」会被提醒一次、再请求一次，
+        // 同一段正文再排一份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(Self.sse(["记住了，天冷的时候我会提醒你。"]))
         service = makeService()
 
         var events: [ChatEvent] = []
@@ -80,7 +83,8 @@ final class ChatToolFeedbackTests: XCTestCase {
         XCTAssertEqual(ToolTraceCodec.decode(done.message.toolTraceJson), done.toolTraces)
 
         // 回灌给模型的形状：`【工具结果】` + 摘要 + 结果 + 「接着把话说完」。
-        XCTAssertEqual(StubURLProtocol.recordedBodies.count, 2)
+        XCTAssertEqual(StubURLProtocol.recordedBodies.count, 3,
+                       "工具一轮 + 回灌一轮 + 提醒后的重试一轮")
         let second = try JSONSerialization.jsonObject(with: StubURLProtocol.recordedBodies[1]) as? [String: Any]
         let messages = try XCTUnwrap(second?["messages"] as? [[String: Any]])
         let contents = messages.compactMap { $0["content"] as? String }
@@ -101,6 +105,12 @@ final class ChatToolFeedbackTests: XCTestCase {
             traceTitle: "联网搜索"
         )
         let block = #"{"name":"web_search","arguments":{"query":"天气"}}"#
+        StubURLProtocol.enqueue(
+            Self.sse(["我去看看。\n```yap-tool\n\(block)\n```"]),
+            Self.sse(["我这边查不了，凭印象说吧。"])
+        )
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(
             Self.sse(["我去看看。\n```yap-tool\n\(block)\n```"]),
             Self.sse(["我这边查不了，凭印象说吧。"])
@@ -138,6 +148,9 @@ final class ChatToolFeedbackTests: XCTestCase {
         ```
         """
         StubURLProtocol.enqueue(Self.sse([reply]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(Self.sse([reply]))
         var events: [ChatEvent] = []
         for try await event in service.send(sessionId: sessionId, text: "每天晚上十点半来问我一句") {
             events.append(event)
@@ -168,6 +181,9 @@ final class ChatToolFeedbackTests: XCTestCase {
         ```
         """
         StubURLProtocol.enqueue(Self.sse([reply]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(Self.sse([reply]))
         for try await _ in service.send(sessionId: sessionId, text: "每隔几小时来陪我一下") {}
         let stored = try XCTUnwrap(try temp.stores.proactiveRules.byPersona(personaId).first)
         XCTAssertEqual(stored.kind, .interval)
@@ -189,6 +205,9 @@ final class ChatToolFeedbackTests: XCTestCase {
         service = makeService(personaText: { cards.systemText($0) })
 
         StubURLProtocol.enqueue(Self.sse(["在的。"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(Self.sse(["在的。"]))
         for try await _ in service.send(sessionId: sessionId, text: "在吗") {}
 
         let body = try JSONSerialization.jsonObject(with: StubURLProtocol.recordedBodies[0]) as? [String: Any]
@@ -202,6 +221,9 @@ final class ChatToolFeedbackTests: XCTestCase {
     func testEmptyCardFallsBackToWrittenPrompt() async throws {
         let cards = PersonaCardRepository(stores: temp.stores)
         service = makeService(personaText: { cards.systemText($0) })
+        StubURLProtocol.enqueue(Self.sse(["在的。"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(Self.sse(["在的。"]))
         for try await _ in service.send(sessionId: sessionId, text: "在吗") {}
         let body = try JSONSerialization.jsonObject(with: StubURLProtocol.recordedBodies[0]) as? [String: Any]

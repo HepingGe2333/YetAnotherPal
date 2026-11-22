@@ -19,6 +19,8 @@ import com.yap.app.domain.DomainErrorCode
 import com.yap.app.domain.PersonaProfile
 import com.yap.app.domain.PersonaRevisionReason
 import com.yap.app.domain.ProactiveLevel
+import com.yap.app.domain.SpeechStyleApply
+import com.yap.app.domain.SpeechStyleCodec
 import com.yap.app.domain.SleepPolicy
 import com.yap.app.domain.ModelProfile
 import com.yap.app.domain.PersonaDraft
@@ -503,6 +505,35 @@ class PersonaRepository @Inject constructor(
             insertRevision(persona, PersonaRevisionReason.BEFORE_EVOLUTION, now)
             personaDao.update(evolved)
             insertRevision(evolved, PersonaRevisionReason.evolved(summary), now)
+        }
+    }
+
+    /**
+     * 「从最近聊天学习话风」里点「应用」：把学到的说话方式**立刻**写进人格，并记一个版本。
+     *
+     * 和 [save] 的区别：这里只改 `speechStyleJson`，用户不用再按一次保存——
+     * 「应用」就是这一次编辑的结果，点了就该生效（点「取消」则什么都不写，连这个函数都不会被调到）。
+     *
+     * 为什么要 bump 版本：版本历史（`persona_revisions`）按 `(personaId, version)` 唯一，
+     * 不换版本就没有地方挂这一条记录。所以他「学会了新的说话方式」也算人格进入新的一版：
+     * 成长页里能看到「编辑前 / 编辑后」这两条，回滚时至少人设正文是能回去的
+     * （话风本身不在快照列里，这一点在编辑页的文案里没有暗示成「可回滚话风」）。
+     *
+     * @param speechStyleJson 已经是 [SpeechStyleCodec] 编码好的 JSON；空话风不写（不产生空版本）
+     */
+    suspend fun applySpeechStyle(personaId: String, speechStyleJson: String): Result<Unit> = runCatching {
+        val persona = personaDao.getById(personaId) ?: userError(DomainErrorCode.PERSONA_NOT_FOUND)
+        val style = SpeechStyleCodec.decodeOrEmpty(speechStyleJson)
+        val now = System.currentTimeMillis()
+        val updated = SpeechStyleApply.next(persona, style, now)
+        // 空话风（模型什么都没给、本地兜底也空）不写库：宁可保持原样，也不制造一个空版本。
+        if (updated == null) return@runCatching
+        // 与其它写路径一致：服务端模式下先让服务端接受，再写本机缓存。
+        val persisted = serverPersist(updated, existing = persona, creating = false)
+        database.withTransaction {
+            insertRevision(persona, PersonaRevisionReason.BEFORE_EDIT, now)
+            personaDao.update(persisted)
+            insertRevision(persisted, PersonaRevisionReason.EDITED, now)
         }
     }
 

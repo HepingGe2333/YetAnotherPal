@@ -61,6 +61,7 @@ import com.yap.app.domain.PromptBuilder
 import com.yap.app.domain.ContextAssembly
 import com.yap.app.domain.PromptLanguage
 import com.yap.app.domain.PromptTemplates
+import com.yap.app.domain.ProtocolReminder
 import com.yap.app.domain.ToolRounds
 import com.yap.app.domain.PersonaSwitchNotice
 import com.yap.app.domain.PersonaSwitchResult
@@ -808,6 +809,8 @@ class ChatRepository @Inject constructor(
             return@flow
         }
         val config = resolved.config
+        // 这个人的提示词语言（与界面语言无关）：协议提醒、危机提示都按它选文案。
+        val replyLanguage = PromptLanguage.resolve(persona.languageTag)
         // 只读最近 N 条：长会话不再每次把整段历史读进内存（更早的部分已经收成摘要了）。
         val recentHistory = messageDao.recentBySession(sessionId, CONTEXT_RECENT_LIMIT)
         // 这一轮带的语音/视频：只在这一轮真的发出去（历史里不重复 base64）。
@@ -918,6 +921,9 @@ class ChatRepository @Inject constructor(
             // 变量每轮 generateAssistant 重新初始化，所以「结束后恢复 low」是自然结果，不需要收尾复位。
             var reasoningEffort = ReasoningEffort.DEFAULT
             var thinkCalledThisTurn = false
+            // 0.16 协议提醒：这一轮是否已经因为「只有正文、没有调工具」提醒过一次。
+            // 只在这里计数（同一轮最多一次），提醒本身不进数据库、也不进 toolTrace。
+            var protocolReminded = false
             while (true) {
                 val buffer = StringBuilder()
                 adapter.streamChat(
@@ -948,6 +954,36 @@ class ChatRepository @Inject constructor(
                 calls.forEach { call ->
                     // 数字（原生 tool_calls）与字符串（代码块）都认，见 ToolRounds.requested。
                     maxToolRounds = ToolRounds.merge(maxToolRounds, ToolRounds.requested(call))
+                }
+                // 0.16 工具协议：这一轮既没有 `send_message` / `stay_silent`、也没有任何别的工具，
+                // 却直接写出了正文——先别急着走兼容回退。把这段正文当作 assistant 消息塞回对话、
+                // 追加一条**不可见**的 user 提醒，然后带上工具重新请求一次（同一轮最多一次）。
+                // 这样「不守规矩」的回复还有机会变成一条真正的 send_message，而不是留一条 legacy。
+                if (ProtocolReminder.shouldRemind(
+                        hasToolCalls = calls.isNotEmpty(),
+                        body = buffer.toString().trim(),
+                        messagesSent = sentMessages.size,
+                        silenced = silenced,
+                        deferred = deferred,
+                        // 危机优先（0.15）：危机轮不提醒，多等一轮没有意义。
+                        // 判定本身失败过就当「不是危机」，不能让提醒分支把这一轮打崩。
+                        crisis = runCatching { crisisJudgement.await().isCrisis }.getOrDefault(false),
+                        alreadyReminded = protocolReminded
+                    )
+                ) {
+                    protocolReminded = true
+                    val reminderBody = buffer.toString().trim()
+                    // 只进本地日志：提醒本身与模型刚才那段正文都不会落库。
+                    android.util.Log.i(
+                        "ChatRepository",
+                        ProtocolReminder.logLine(ProtocolReminder.MAX_ATTEMPTS, reminderBody.length)
+                    )
+                    conversation += WireMessage("assistant", reminderBody)
+                    conversation += WireMessage("user", ProtocolReminder.text(replyLanguage))
+                    // 气泡里那点临时文字清干净：模型这一轮还没真正说话。
+                    shownText = ""
+                    emit(GenerationEvent.Delta(""))
+                    continue
                 }
                 // stay_silent 是「这一轮不回」的控制信号，不算一次工具轮：
                 // 即使轮数刚好用尽，也不能把同一响应里的正文落库（规范：工具 + 正文只沉默）。
@@ -2358,12 +2394,14 @@ class ChatRepository @Inject constructor(
         )
         // 0.15 上下文装配 v2 + state_first profile（docs/design/context-memory-v2.md、
         // spec/context-profile/README.md）：
-        // 当前状态 → 引导 → 人设 → 工具 → 反 AI → 备忘录 → 附加块 → 语言 → 边界 → 剩余预算给原文。
+        // 当前状态 → 引导 → 回复节奏 → 人设 → 工具 → 反 AI → 备忘录 → 附加块 → 语言 → 边界 → 剩余预算给原文。
         // 每段都由 PromptBuilder 的可组合段函数生成，这里只负责把它们按顺序交给 ContextAssembly。
         val assembly = ContextAssembly.assemble(
             ContextAssembly.Inputs(
                 state = PromptBuilder.currentStateBody(promptInputs),
                 guidance = PromptBuilder.guidanceBlock(promptInputs),
+                // 0.16 回复节奏：这一轮发几条、每条多长（紧跟引导之后、人设之前）。
+                rhythm = PromptBuilder.rhythmBlock(promptInputs),
                 persona = PromptBuilder.personaBlock(promptInputs),
                 tools = PromptBuilder.toolsBlock(promptInputs),
                 antiAi = PromptBuilder.antiAiSection(personaLanguage),

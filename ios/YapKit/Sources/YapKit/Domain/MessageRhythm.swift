@@ -226,10 +226,15 @@ public enum MessageRhythm {
 
 public enum TypingDelay {
 
-    /// 均值公式里的基础项与每字项：**转发共享契约**（0.15 起 `0.3 + 字数 × 0.018`）。
+    /// 均值公式里的基础项与每字项：**转发共享契约**（0.15.7 起 `0.6 + 字数 × 0.01`）。
     ///
     /// 旧公式（`0.4 + 字数 × 0.025`，区间 0.4–4.0 秒）是**命令式**的：同样字数永远等同样久，
     /// 聊久了像进度条。新公式是「均值 + ±35% 随机波动」，随机源由调用方注入（测试可钉住）。
+    ///
+    /// 0.15.7 按体验结论把均值整体调慢了一档（需求：**均值 0.6–0.9 秒，15 字约 0.75 秒**）：
+    /// 0 字 0.6 秒、15 字 0.75 秒、30 字 0.9 秒。字少的短句不再「秒回」，
+    /// 但也没有慢到让人觉得他在拖；±35% 的随机波动保留（同样字数每次也不完全一样）。
+    /// 数字只在 `ExperienceContract` 一处（与 Android / agentd 同一份），这里不写第二份。
     public static let baseSeconds = ExperienceContract.TYPING_BASE_SECONDS
     public static let perCharSeconds = ExperienceContract.TYPING_SECONDS_PER_CHAR
     public static let minSeconds = ExperienceContract.TYPING_MIN_SECONDS
@@ -255,7 +260,8 @@ public enum TypingDelay {
     /// 首条消息显示前的延迟（秒）：**长度均值 + 心情修正 + ±35% 随机波动**（0.15）。
     ///
     /// 公式在 `ExperienceContract.typingDelaySeconds`（与 Android 同一份）：
-    /// 均值 `clamp(0.3 + 字数×0.018 + 心情修正, 0.3, 2.2)`，再乘 `1 ± 35%`。
+    /// 均值 `clamp(0.6 + 字数×0.01 + 心情修正, 0.3, 2.2)`，再乘 `1 ± 35%`。
+    /// 15 字约 0.75 秒、30 字约 0.9 秒（需求里的「均值 0.6–0.9 秒」）。
     ///
     /// - Parameter serverAuthoritative: 服务端权威模式（0.14.1 §8）。延迟已经由服务端在
     ///   入队时按同一个公式算进 `visibleAt`，客户端**不能再加一次**，所以这里直接返回 0。

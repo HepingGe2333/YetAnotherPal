@@ -176,6 +176,9 @@ final class ToolCallAgentTests: XCTestCase {
 
     func testSystemPromptDeclaresSendMessageOnlyProtocol() async throws {
         StubURLProtocol.enqueue(.sse(textDeltas: ["好"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        StubURLProtocol.enqueue(.sse(textDeltas: ["好"]))
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         let system = try systemPrompt()
@@ -272,6 +275,9 @@ final class ToolCallAgentTests: XCTestCase {
     // MARK: - 4. 兼容回退：没有 send_message 的正文仍然落库，但标记 legacy
 
     func testLegacyBodyFallbackIsLoggedAndStillSaved() async throws {
+        StubURLProtocol.enqueue(.sse(textDeltas: ["我在呢。"]))
+        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
+        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["我在呢。"]))
         let events = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 

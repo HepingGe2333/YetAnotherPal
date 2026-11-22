@@ -31,6 +31,11 @@ import java.time.Clock
  * 这里按顺序收集成多条消息交给 `ChatService`；最后一段直接写出来的正文只当「正在输入」，
  * 只有整轮一次 `send_message` 都没调时才作为 **legacy 兼容回退**（`ReplyOutcome.legacy`）。
  *
+ * 0.15「协议违规自动提醒」：整轮既没有 `send_message` 也没有 `stay_silent`、却直接写了正文时，
+ * 先把这段正文作为 assistant、追加一条**不可见**的 user 提醒（[PROTOCOL_REMINDER]），
+ * 再带 tools 重试一次。重试正确调用工具/沉默 → 正常；仍然直接写正文 → 用**最新**那段正文
+ * legacy 落库（不把提醒前、提醒后两段拼起来）。提醒不写库、不发 SSE，危机轮与 defer 轮不提醒。
+ *
  * 0.16 思考强度（§2）：主聊天每条请求都带 `reasoning_effort`（服务端配置或默认 `low`）；
  * 同一轮里模型调用 `think` 之后，后续请求换成 `high`；`generate()` 结束即丢弃状态，
  * 下一轮回到默认值。辅助调用（情绪/进化/主动消息）不走这里，也不带这一格。
@@ -105,6 +110,8 @@ class LlmReplyGenerator(
         // 这一轮模型「想沉默」：普通轮里是 `stay_silent` 真的执行了；危机轮里是被拦截的
         // `stay_silent` / `defer_reply`。聊天层据此把 SSE 形状切成「有正文、非 silent」。
         var silenceRequested = false
+        // 这一轮已经 `defer_reply`：和客户端 `ProtocolReminder` 一致，不再追加提醒（已经明确晚点回）。
+        var deferredReply = false
         // 危机轮里拦下过「不回」的工具：同一响应正文照用，然后立刻收尾（不再问模型）。
         var crisisForcedReply = false
         var textSoFar = StringBuilder()
@@ -118,11 +125,21 @@ class LlmReplyGenerator(
 
         var round = 0
         var sentMultimodal = false
-        while (round < maxRounds) {
+        // 0.15 UX：协议违规（整轮没调 send_message/stay_silent、却直接写了正文）时，
+        // 自动追加一条不可见的 user 提醒并带 tools 重试一次。最多一次，不写库、不下发。
+        var reminderUsed = false
+        var retryPending = false
+        // 重试那一次的 delta 先攒着：重试如果仍然违规，这段文字不落库也不该发给客户端。
+        val retryChunks = ArrayList<String>()
+        val retryText = StringBuilder()
+        while (round < maxRounds || retryPending) {
             round += 1
             if (clock.millis() > deadline) break
+            val retryAttempt = retryPending
+            retryPending = false
             // 最后一轮不再给 tools：让它只能用已经查到的信息说话，而不是无限查下去。
-            val useTools = toolEnabled && round < maxRounds
+            // 协议提醒的重试是例外：必须带 tools 重新请求（否则模型没法改调 send_message）。
+            val useTools = toolEnabled && (retryAttempt || round < maxRounds)
             val effort = if (deepThinking) LlmDefaults.REASONING_EFFORT_HIGH else baseEffort
             val turn = try {
                 llm.chat(
@@ -131,9 +148,15 @@ class LlmReplyGenerator(
                     tools = if (useTools) toolsJson else null,
                     reasoningEffort = effort,
                     onDelta = { delta ->
-                        // 逐段下发：客户端拿到的就是模型真实吐出的内容（不是攒完再切块）。
-                        textSoFar.append(delta)
-                        emit(SseEvent.Delta(delta))
+                        if (retryAttempt) {
+                            // 重试先不流给客户端：等确定它真的调了工具，再把这段当「正在输入」补发。
+                            retryChunks += delta
+                            retryText.append(delta)
+                        } else {
+                            // 逐段下发：客户端拿到的就是模型真实吐出的内容（不是攒完再切块）。
+                            textSoFar.append(delta)
+                            emit(SseEvent.Delta(delta))
+                        }
                     }
                 )
             } catch (failure: LlmException) {
@@ -150,7 +173,43 @@ class LlmReplyGenerator(
                 throw failure
             }
             usage = usage.plus(turn.usage)
-            if (turn.toolCalls.isEmpty()) break
+            if (turn.toolCalls.isEmpty()) {
+                if (retryAttempt) {
+                    // 提醒后仍然直接写正文：按「仍违规 → legacy」收尾，用**这次最新**写的那段
+                    // （与 Android/iOS 的 `ProtocolReminder` 落库口径一致）。重试的 delta 照常
+                    // 补发给客户端，但正文只保留最新这一份，不把两段拼起来。
+                    retryChunks.forEach { chunk -> emit(SseEvent.Delta(chunk)) }
+                    textSoFar = StringBuilder(retryText)
+                    retryChunks.clear()
+                    retryText.clear()
+                    break
+                }
+                if (!reminderUsed && sentMessages.isEmpty() &&
+                    shouldRemindProtocol(turn.text, crisis, deferredReply)
+                ) {
+                    // 正文作为 assistant，追加一条**不可见**的 user 提醒；这条提醒只在内存里。
+                    messages += LlmMessage.assistant(turn.text)
+                    messages += LlmMessage.user(PROTOCOL_REMINDER)
+                    reminderUsed = true
+                    retryPending = true
+                    // 与客户端 `ProtocolReminder` 一致：把刚才那段「正在输入」的临时文字清掉，
+                    // 提醒之后模型要重新说一遍（正确发送时会出现新的 message.created；沉默时整轮不留痕）。
+                    emit(SseEvent.Delta(""))
+                    System.err.println(
+                        "[agentd] protocol_reminder：这一轮直接输出了正文但没有调用工具，" +
+                            "已追加一次不可见提醒并带 tools 重试（第 $round 轮）"
+                    )
+                    continue
+                }
+                break
+            }
+            if (retryAttempt) {
+                // 重试真的调了工具：把攒着的正文按原分片补发，保持「边生成边下发」的观感。
+                retryChunks.forEach { chunk -> emit(SseEvent.Delta(chunk)) }
+                textSoFar.append(retryText)
+                retryChunks.clear()
+                retryText.clear()
+            }
             messages += LlmMessage.assistant(turn.text, toolCalls = turn.toolCalls)
             var silentThisRound = false
             // 一轮里的多模态工具结果（listen/watch）先收集，等所有 tool 消息回完再作为**一条**
@@ -197,6 +256,7 @@ class LlmReplyGenerator(
                     )
                 }
                 if (outcome.deepThinking) deepThinking = true
+                if (outcome.name == ServerToolCatalog.DEFER_REPLY) deferredReply = true
                 if (outcome.staySilent) {
                     silentThisRound = true
                     silenceRequested = true
@@ -223,6 +283,9 @@ class LlmReplyGenerator(
         }
 
         val toolTraceJson = tools.encodeTrace(traces)
+        val legacyText = textSoFar.toString().trim().takeIf {
+            !suppressed && sentMessages.isEmpty() && it.isNotEmpty()
+        }
         return ReplyOutcome(
             usage = Usage(promptTokens = usage.promptTokens, completionTokens = usage.completionTokens),
             suppressed = suppressed,
@@ -237,10 +300,24 @@ class LlmReplyGenerator(
             // 与 messages 一一对应；落库时用这些 id，工具结果里的 messageId 才是真的。
             messageIds = if (suppressed) emptyList() else sentMessages.map { it.messageId },
             // 整轮一次 `send_message` 都没调、却有正文：这是 legacy 兼容回退（旧模型/旧提示词）。
-            legacy = !suppressed && sentMessages.isEmpty() && textSoFar.isNotBlank(),
+            legacy = legacyText != null,
+            // 协议提醒后仍然违规时，用最新那段正文（提醒前后两段不拼接）。
+            legacyText = legacyText,
             silenceRequested = silenceRequested
         )
     }
+
+    /**
+     * 该不该发协议提醒：**非危机轮**、toolEnabled、模型这次直接写了正文，且这一轮还没 defer。
+     *
+     * 调用方保证「这一轮还没有 `send_message`」「只提醒一次」；`stay_silent` 轮会在工具回路里
+     * 直接结束，不会走到这里。危机轮刻意不提醒：那一轮已经有 `ChatService` 的可见正文 /
+     * 安全提示兜底，多问一次模型只会改变危机行为（还会让被拦下的 `stay_silent` 又出现一次）；
+     * `defer_reply` 同理——它已经明确表示「过一会儿再回」，再提醒一次只会多问一遍。
+     * 拉黑轮根本不会走到生成器。
+     */
+    private fun shouldRemindProtocol(text: String, crisis: Boolean, deferred: Boolean): Boolean =
+        toolEnabled && !crisis && !deferred && text.isNotBlank()
 
     /** 想「这一轮不说话」的工具：危机轮里一律不执行（见类注释）。 */
     private fun isSilencingTool(name: String): Boolean {
@@ -301,5 +378,15 @@ class LlmReplyGenerator(
 
         /** 整个工具回路的硬超时：2 分钟（单次请求的超时仍是 5 分钟，见 `LlmClient`）。 */
         const val DEFAULT_DEADLINE_MS: Long = 2 * 60 * 1000L
+
+        /**
+         * 协议违规时追加给模型的**不可见**提醒（0.15 UX）。
+         *
+         * 它只出现在重试请求的 `messages` 里：不写库、不发 SSE、也不计入回复正文。
+         * 文案把三个出口说死（发消息 / 沉默 / 做别的事），避免模型把「写正文」当成出口。
+         */
+        const val PROTOCOL_REMINDER: String =
+            "（系统提醒）你刚才直接输出了正文，但没有调用工具。请明确：要发消息→send_message(text)；" +
+                "不想发→stay_silent；要做别的事→对应工具。不要直接输出正文。"
     }
 }
