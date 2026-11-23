@@ -33,6 +33,8 @@ import com.yap.app.navigation.YapNavHost
 import com.yap.app.util.ChatNotifier
 import com.yap.app.util.ProactiveNotifier
 import com.yap.app.ui.RootViewModel
+import com.yap.app.ui.screens.settings.UpdateAvailableDialog
+import com.yap.app.ui.screens.settings.openReleasePage
 import com.yap.app.ui.theme.YapTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -62,6 +64,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val rootViewModel: RootViewModel = hiltViewModel()
             val settings by rootViewModel.settings.collectAsStateWithLifecycle()
+            // 更新检查的结果是全局的（自动检查 + 设置页手动检查共用一份），对话框就挂在这里：
+            // 同一个版本不会在两个地方各弹一次。
+            val updateState by rootViewModel.updateState.collectAsStateWithLifecycle()
             // Android 13+ 通知权限：首次进入请求一次，拒绝过两次就不再打扰。
             val notificationPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission()
@@ -89,6 +94,17 @@ class MainActivity : ComponentActivity() {
                         pendingSessionId = null
                     }
                 )
+                updateState.prompt?.let { release ->
+                    UpdateAvailableDialog(
+                        release = release,
+                        // 「稍后」只是收起这一次：版本仍记着，24 小时内不再自动打扰。
+                        onLater = rootViewModel::dismissUpdatePrompt,
+                        onDownload = {
+                            openReleasePage(this@MainActivity, release.htmlUrl)
+                            rootViewModel.dismissUpdatePrompt()
+                        }
+                    )
+                }
             }
         }
     }

@@ -50,6 +50,8 @@ struct SettingsScreen: View {
                     SettingsUsageSection()
                     proactiveSection
                     backupSection
+                    updateSection
+                    feedbackSection
                     dangerSection
                     footer
                 }
@@ -651,6 +653,48 @@ struct SettingsScreen: View {
                             .foregroundStyle(.tertiary)
                     }
                     .padding(10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: - 更新检查
+
+    /// 0.14.2：版本小节（当前版本 / 手动检查 / 自动检查 / 预览版 / 上次检查）。
+    private var updateSection: some View {
+        UpdateSettingsSection(updates: env.updates, accent: accent) { alert in
+            banner = alert
+        }
+    }
+
+    // MARK: - 反馈
+
+    /// 0.14.2：反馈入口。内容先落本机再打开预填的 GitHub Issue（见 `FeedbackScreen`）。
+    private var feedbackSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            MFSectionTitle(text: FeedbackCopy.screenTitle)
+
+            MFCard {
+                NavigationLink(destination: FeedbackScreen()) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "envelope")
+                            .font(.system(size: 14))
+                            .frame(width: 22)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(FeedbackCopy.screenTitle)
+                                .font(.system(.body, design: .serif))
+                            Text(FeedbackCopy.settingsSubtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 12)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

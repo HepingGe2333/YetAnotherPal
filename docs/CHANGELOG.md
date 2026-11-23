@@ -49,6 +49,16 @@
 - 新增/更新 `AppMemoryBudgetTest`；Android 单测 **2074 / 0 失败**，agentd **668 / 0 失败**。
 - 说明：移动端 256MB 是**预算/上限设计**，尚未在低端真机上用 Memory Profiler 实测；下一步需真机验收。
 
+
+### 0.14.2 续：反馈与更新检查回归
+
+- 设置页新增「反馈」：类型/内容/联系方式，先本地原子落盘到 `files/feedback/`，再打开预填 GitHub Issue；
+  不自动提交、不收集 token；浏览器打不开时保留「已保存」提示。
+- 设置页新增「更新检查」：GitHub Releases 只读检查、当前版本/最新版本、手动检查、自动检查开关、
+  包含预发布开关；24h 节流、403/网络失败静默；只打开 Release 页，不自动下载安装。
+- Android/iOS 双端；AppSettings 新增更新开关（DataStore，不进 Room/备份）；更新弹窗挂在根视图。
+- 测试：Android 2137、iOS 2175（2 skip）、agentd 668、agentcore 90；两端 Debug/Release 构建通过。
+
 ## 0.14.0（开发中）
 
 - **正在输入不再显示「…」占位气泡**：只显示输入指示，失败/停止不产生空消息。

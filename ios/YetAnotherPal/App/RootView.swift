@@ -37,6 +37,8 @@ struct RootView: View {
                     }
             }
             .environment(\.mfNavigationPath, $path)
+            // 新版本弹窗挂在根视图：自动检查发生在冷启动 / 回前台，那时候用户不一定在设置页。
+            .updateAlert(env.updates)
             .onReceive(AppNotifications.shared.$pendingSessionId) { sessionId in
                 // 点开通知 → 进他那段聊天（0.11.1 审计 P2-2）。
                 guard let sessionId, !sessionId.isEmpty else { return }

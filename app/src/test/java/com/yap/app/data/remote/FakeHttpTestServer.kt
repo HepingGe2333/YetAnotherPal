@@ -57,6 +57,14 @@ internal class FakeHttpTestServer : Closeable {
         responder = { FakeReply.Json(body, status) }
     }
 
+    /** 便捷：延迟 [delayMillis] 再回（用来验客户端的读超时；假服务端是单线程的，够用）。 */
+    fun respondAfter(delayMillis: Long, body: String, status: Int = 200) {
+        responder = {
+            Thread.sleep(delayMillis)
+            FakeReply.Json(body, status)
+        }
+    }
+
     private fun handle(socket: Socket) {
         socket.use { client ->
             val request = try {

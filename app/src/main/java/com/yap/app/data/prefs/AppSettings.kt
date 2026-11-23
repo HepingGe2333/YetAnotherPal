@@ -91,5 +91,23 @@ data class AppSettings(
      * 换人格时按 [staySilentPersonaId] 判断，不会把 A 的沉默算到 B 头上。
      */
     val staySilentPersonaId: String? = null,
-    val staySilentStreak: Int = 0
+    val staySilentStreak: Int = 0,
+
+    /**
+     * 自动检查更新（默认开）。
+     *
+     * 只在设置页打开 / App 回到前台时**静默**查一次，24 小时最多一次
+     * （[com.yap.app.domain.UpdateThrottle]）；失败与限流都不弹错误。
+     */
+    val updateCheckEnabled: Boolean = true,
+    /**
+     * 检查更新时把预发布版本（tag 带 `-beta` 之类）也算进来。
+     *
+     * 默认关：`/releases/latest` 本来就只给正式版，这里多一道「用户明确想看才提示」的闸。
+     */
+    val updateIncludePrereleases: Boolean = false,
+    /** 上次检查更新的时刻（内部状态：只有 24h 节流读它，设置页不显示）。 */
+    val updateLastCheckedAt: Long = 0L,
+    /** 上一次已经弹过「有新版本」的版本号（内部状态：同一个版本不反复打扰）。 */
+    val updateLastNotifiedVersion: String? = null
 )

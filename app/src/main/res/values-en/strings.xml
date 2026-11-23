@@ -1183,6 +1183,29 @@
     <string name="settings_wipe_title">Delete all local data</string>
     <string name="settings_wipe_desc">Every persona, conversation, memory, preset, wake-up rule, API setup, and setting is removed</string>
     <string name="settings_security_note">Your API key is encrypted by Android Keystore and never written to logs or crash reports. Only HTTPS is allowed by default; conversations stay on this phone.</string>
+    <!-- 0.14.2 feedback: saved locally + open a prefilled GitHub issue (no auto-submit, no tokens) -->
+    <string name="settings_section_feedback">Feedback</string>
+    <string name="settings_feedback_title">Tell us</string>
+    <string name="settings_feedback_desc">Something broken, or something you want</string>
+    <string name="feedback_dialog_title">Feedback</string>
+    <string name="feedback_kind_section">Type</string>
+    <string name="feedback_kind_problem">Problem</string>
+    <string name="feedback_kind_suggestion">Suggestion</string>
+    <string name="feedback_kind_other">Other</string>
+    <string name="feedback_content_label">Details</string>
+    <string name="feedback_content_hint">What happened? The more specific the better (1000 characters max)</string>
+    <string name="feedback_content_counter">%1$d / %2$d</string>
+    <string name="feedback_contact_label">Contact (optional)</string>
+    <string name="feedback_contact_hint">Leave one if you would like a reply (email or another handle)</string>
+    <string name="feedback_submit">Save and open GitHub</string>
+    <string name="feedback_cancel">Cancel</string>
+    <string name="feedback_error_empty">Please write something first.</string>
+    <string name="feedback_error_too_long">That is over %1$d characters; please trim it.</string>
+    <string name="feedback_error_contact_too_long">Contact is too long (%1$d characters max).</string>
+    <string name="feedback_saved">Saved. You can submit it in the browser.</string>
+    <string name="feedback_saved_open_failed">Saved on this phone, but the browser could not be opened.</string>
+    <string name="feedback_save_failed">Could not save this feedback.</string>
+    <string name="feedback_saved_where">Stored under files/feedback/.</string>
     <string name="settings_about_entry">About Yap</string>
     <string name="settings_selected_cd">Selected</string>
 
@@ -1826,4 +1849,27 @@
     <!-- 0.13 stay silent (spec/mood §4): only ever shown in an expanded trace; normally no bubble at all -->
     <string name="tool_trace_stay_silent">Read, no reply</string>
     <string name="chat_sticker_delete_failed">Couldn\'t delete it, try again in a moment</string>
+
+    <!-- 0.14.2 settings: update channel (GitHub Releases). Manual check is a normal setting row; -->
+    <!-- failures and 403 rate limits only ever produce one quiet status line, never an error dialog. -->
+    <string name="settings_section_update">Updates</string>
+    <string name="settings_update_check_title">Check for updates</string>
+    <string name="settings_update_desc">See whether GitHub has a newer version. Automatic checks run at most once a day.</string>
+    <string name="settings_update_checking">Checking…</string>
+    <string name="settings_update_up_to_date">You are on the latest version</string>
+    <string name="settings_update_available">Version v%1$s is available</string>
+    <string name="settings_update_skipped_prerelease">The newest release is a pre-release, so it is skipped by your setting</string>
+    <string name="settings_update_unavailable">No release information available right now</string>
+    <string name="settings_update_failed">The check didn\'t go through. Try again later.</string>
+    <string name="settings_update_auto_title">Check automatically</string>
+    <string name="settings_update_auto_desc">Checks quietly when you open Settings or return to the app, at most once every 24 hours</string>
+    <string name="settings_update_prerelease_title">Include pre-releases</string>
+    <string name="settings_update_install_title">Update to v%1$s</string>
+    <string name="settings_update_install_desc">Open the release page and download it yourself; nothing is downloaded automatically</string>
+    <string name="settings_update_prerelease_desc">Also notify about beta / rc builds</string>
+    <string name="update_dialog_title">Version v%1$s is out</string>
+    <string name="update_dialog_prerelease">Pre-release</string>
+    <string name="update_dialog_no_notes">This release has no notes.</string>
+    <string name="update_dialog_later">Later</string>
+    <string name="update_dialog_download">Get it</string>
 </resources>

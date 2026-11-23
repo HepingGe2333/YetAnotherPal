@@ -51,6 +51,11 @@ final class AppEnvironment: ObservableObject {
     let agentLoop: AgentLoop
     let heartbeat: HeartbeatController
     let backup: BackupService
+    /// 更新渠道（0.14.2）：设置页的「检查更新」、前台静默检查与新版本弹窗共用这一份状态。
+    ///
+    /// 不放进 `YapKit`：它要跟着 `scenePhase` 走（SwiftUI 才知道前台/后台），
+    /// 而「问哪一版是最新」的逻辑本身已经在 Kit 的 `UpdateChecker` 里。
+    let updates: UpdateCenter
     let dataReset: DataReset
     let chat: ChatService
     /// 人设卡：结构化编辑 + `update_persona` 工具 + 提示词渲染都走它。
@@ -513,6 +518,8 @@ final class AppEnvironment: ObservableObject {
             appVersion: Self.appVersion
         )
         self.backup = backup
+        // 更新检查：版本号只从 bundle 取（与设置页头部显示的是同一个数字）。
+        self.updates = UpdateCenter(currentVersion: Self.appVersion)
         // 媒体清理收进 `DataReset`（0.10.2 审计 P1-7）：设置页与备份页两个入口都只调它，
         // 谁也不会再忘记删图片/头像文件。
         self.dataReset = DataReset(

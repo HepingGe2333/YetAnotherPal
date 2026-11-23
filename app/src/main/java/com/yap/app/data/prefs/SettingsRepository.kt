@@ -73,6 +73,12 @@ class SettingsRepository @Inject constructor(
         // 「已读不回」连续轮数（内部状态）：连续 ≤2 轮，回一句就清零。
         val staySilentPersonaId = stringPreferencesKey("stay_silent_persona_id")
         val staySilentStreak = intPreferencesKey("stay_silent_streak")
+
+        // 更新检查（0.14.2）：开关是本机偏好；后两个是节流用的内部状态。
+        val updateCheckEnabled = booleanPreferencesKey("update_check_enabled")
+        val updateIncludePrereleases = booleanPreferencesKey("update_include_prereleases")
+        val updateLastCheckedAt = longPreferencesKey("update_last_checked_at")
+        val updateLastNotifiedVersion = stringPreferencesKey("update_last_notified_version")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -100,7 +106,11 @@ class SettingsRepository @Inject constructor(
             moodJudgeUserMessageCount = prefs[Keys.moodJudgeUserMessageCount] ?: 0,
             moodJudgeLastRunAt = prefs[Keys.moodJudgeLastRunAt] ?: 0L,
             staySilentPersonaId = prefs[Keys.staySilentPersonaId],
-            staySilentStreak = (prefs[Keys.staySilentStreak] ?: 0).coerceIn(0, STAY_SILENT_MAX_STREAK)
+            staySilentStreak = (prefs[Keys.staySilentStreak] ?: 0).coerceIn(0, STAY_SILENT_MAX_STREAK),
+            updateCheckEnabled = prefs[Keys.updateCheckEnabled] ?: true,
+            updateIncludePrereleases = prefs[Keys.updateIncludePrereleases] ?: false,
+            updateLastCheckedAt = prefs[Keys.updateLastCheckedAt]?.takeIf { it > 0L } ?: 0L,
+            updateLastNotifiedVersion = prefs[Keys.updateLastNotifiedVersion]
         )
     }
 
@@ -307,6 +317,32 @@ class SettingsRepository @Inject constructor(
     suspend fun resetStaySilentStreak() = edit {
         it.remove(Keys.staySilentStreak)
         it.remove(Keys.staySilentPersonaId)
+    }
+
+    /**
+     * 自动检查更新的开关。
+     *
+     * 只写本地、不镜像到服务端：这是「这台设备要不要联网查新版本」的偏好，
+     * 不是跟「他」一起走的设置。
+     */
+    suspend fun setUpdateCheckEnabled(enabled: Boolean) = edit { it[Keys.updateCheckEnabled] = enabled }
+
+    /** 是否把预发布版本也算作「有新版本」。 */
+    suspend fun setUpdateIncludePrereleases(enabled: Boolean) =
+        edit { it[Keys.updateIncludePrereleases] = enabled }
+
+    /**
+     * 记下这次检查的时间与「已经提示过的版本」（内部状态，24h 节流与去重用）。
+     *
+     * [lastCheckedAt] <= 0 表示清掉（例如「删除全部数据」）。
+     */
+    suspend fun setUpdateCheckState(lastCheckedAt: Long, lastNotifiedVersion: String?) = edit {
+        if (lastCheckedAt > 0L) it[Keys.updateLastCheckedAt] = lastCheckedAt else it.remove(Keys.updateLastCheckedAt)
+        if (lastNotifiedVersion.isNullOrBlank()) {
+            it.remove(Keys.updateLastNotifiedVersion)
+        } else {
+            it[Keys.updateLastNotifiedVersion] = lastNotifiedVersion
+        }
     }
 
     companion object {

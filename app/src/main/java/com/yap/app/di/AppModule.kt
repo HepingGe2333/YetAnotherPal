@@ -237,6 +237,17 @@ object AppModule {
         isLenient = true
     }
 
+    /**
+     * 更新检查（0.14.2）：复用全 App 的 OkHttp（连接池共享），超时在 [UpdateChecker] 内部收紧。
+     *
+     * 不做成 `@Inject constructor` 是故意的：那是给单测留的「换 endpoint / 换 UA / 换 logger /
+     * 换超时」这些构造参数的入口，不让 Hilt 去提供只属于测试的值。
+     */
+    @Provides
+    @Singleton
+    fun provideUpdateChecker(okHttp: OkHttpClient): com.yap.app.data.update.UpdateChecker =
+        com.yap.app.data.update.UpdateChecker(okHttp)
+
     @Provides
     @Singleton
     fun provideOkHttp(): OkHttpClient = OkHttpClient.Builder()

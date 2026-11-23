@@ -1163,6 +1163,29 @@
     <string name="settings_wipe_title">删除全部本地数据</string>
     <string name="settings_wipe_desc">人格、会话、记忆、预设、主动唤醒规则、API 配置与设置全部移除</string>
     <string name="settings_security_note">API Key 由 Android Keystore 加密保存，不写入日志或崩溃报告。默认只允许 HTTPS；对话记录仅保存在本机。</string>
+    <!-- 0.14.2 反馈：本地保存 + 打开 GitHub Issue 预填页（不自动提交、不收集 token） -->
+    <string name="settings_section_feedback">反馈</string>
+    <string name="settings_feedback_title">告诉我们</string>
+    <string name="settings_feedback_desc">遇到问题、想要什么功能，都可以说</string>
+    <string name="feedback_dialog_title">反馈</string>
+    <string name="feedback_kind_section">类型</string>
+    <string name="feedback_kind_problem">问题</string>
+    <string name="feedback_kind_suggestion">建议</string>
+    <string name="feedback_kind_other">其他</string>
+    <string name="feedback_content_label">内容</string>
+    <string name="feedback_content_hint">发生了什么？越具体越好（最多 1000 字）</string>
+    <string name="feedback_content_counter">%1$d / %2$d</string>
+    <string name="feedback_contact_label">联系方式（可选）</string>
+    <string name="feedback_contact_hint">想让我们回复你时留一个（邮箱或其他账号）</string>
+    <string name="feedback_submit">保存并去提交</string>
+    <string name="feedback_cancel">取消</string>
+    <string name="feedback_error_empty">先写点内容吧。</string>
+    <string name="feedback_error_too_long">内容超过 %1$d 字了，删一点再提交。</string>
+    <string name="feedback_error_contact_too_long">联系方式太长了（最多 %1$d 字）。</string>
+    <string name="feedback_saved">已保存，可在浏览器提交。</string>
+    <string name="feedback_saved_open_failed">已保存到本机，但没能打开浏览器。</string>
+    <string name="feedback_save_failed">没能保存这条反馈。</string>
+    <string name="feedback_saved_where">保存在 files/feedback/。</string>
     <string name="settings_about_entry">关于 Yap</string>
     <string name="settings_selected_cd">已选择</string>
 
@@ -1774,4 +1797,27 @@
     <!-- 0.13 已读不回（spec/mood §4）：只在这条工具调用成功时可能进痕迹；正常情况不产生任何气泡 -->
     <string name="tool_trace_stay_silent">只读不回</string>
     <string name="chat_sticker_delete_failed">没删掉，等一下再试</string>
+
+    <!-- 0.14.2 settings: update channel (GitHub Releases). Manual check is a normal setting row; -->
+    <!-- failures and 403 rate limits only ever produce one quiet status line, never an error dialog. -->
+    <string name="settings_section_update">更新</string>
+    <string name="settings_update_check_title">检查更新</string>
+    <string name="settings_update_desc">看看 GitHub 上有没有新版本。自动检查每天最多一次。</string>
+    <string name="settings_update_checking">正在检查…</string>
+    <string name="settings_update_up_to_date">已是最新版本</string>
+    <string name="settings_update_available">有新版本 v%1$s</string>
+    <string name="settings_update_skipped_prerelease">最新发布是预发布版本，按你的设置先不提示</string>
+    <string name="settings_update_unavailable">暂时没有可用的发布信息</string>
+    <string name="settings_update_failed">这次没查到，稍后再试</string>
+    <string name="settings_update_auto_title">自动检查更新</string>
+    <string name="settings_update_auto_desc">打开设置页或回到 App 时静默查一次，24 小时内不重复</string>
+    <string name="settings_update_prerelease_title">包含预发布版本</string>
+    <string name="settings_update_install_title">更新到 v%1$s</string>
+    <string name="settings_update_install_desc">打开发布页自己下载安装，不会自动下载</string>
+    <string name="settings_update_prerelease_desc">打开后，beta / rc 这类版本也会提示</string>
+    <string name="update_dialog_title">发现新版本 v%1$s</string>
+    <string name="update_dialog_prerelease">预发布版本</string>
+    <string name="update_dialog_no_notes">这次发布没有写说明。</string>
+    <string name="update_dialog_later">稍后</string>
+    <string name="update_dialog_download">去下载</string>
 </resources>

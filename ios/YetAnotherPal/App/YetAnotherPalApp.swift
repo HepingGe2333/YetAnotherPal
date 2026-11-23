@@ -50,6 +50,9 @@ struct YetAnotherPalApp: App {
                     // 服务端模式（M3/M4）：同步一次状态、起前台事件长轮询、补发待发消息。
                     // 本地模式下 `activateServerMode()` 立刻返回，什么都不做。
                     await env.activateServerMode()
+                    // 冷启动安静地问一次「有没有新版本」（24h 节流；失败完全静默）。
+                    // 单独开一个 Task：检查更新不该拖慢启动，更不该让 `.task` 等网络。
+                    Task { await env.updates.checkOnForeground() }
                     lastScenePhase = scenePhase
                 }
                 .onChange(of: scenePhase) { phase in
@@ -63,6 +66,8 @@ struct YetAnotherPalApp: App {
                         env.startForegroundPulse()
                         // 回前台：服务端模式重新同步 + 重新起事件流（进后台时被取消了）。
                         Task { await env.activateServerMode() }
+                        // 回前台也顺手问一次更新（同一个 24h 节流）；失败不打扰。
+                        Task { await env.updates.checkOnForeground() }
                     case .background:
                         AppNotifications.shared.setAppActive(false)
                         env.stopForegroundPulse()

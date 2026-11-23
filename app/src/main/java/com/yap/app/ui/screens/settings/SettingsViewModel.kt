@@ -22,6 +22,8 @@ import com.yap.app.data.repo.PresetRepository
 import com.yap.app.data.repo.PersonaRepositoryInitializer
 import com.yap.app.data.repo.ProactiveRepository
 import com.yap.app.data.repo.UsageTotals
+import com.yap.app.data.update.UpdateCoordinator
+import com.yap.app.data.update.UpdateUiState
 import com.yap.app.data.remote.ServerConfigRejection
 import com.yap.app.data.remote.ServerCredentials
 import com.yap.app.data.remote.ServerModeRepository
@@ -102,6 +104,13 @@ sealed interface SettingsEvent {
      * 边读库边分批写盘（见 [SettingsViewModel.exportAllChatsTo]）。
      */
     data class ExportReady(val fileName: String) : SettingsEvent
+
+    /**
+     * 反馈已经保存好了：界面拿这个地址去打开浏览器（https 校验在 UI 层，见 `openFeedbackIssue`）。
+     *
+     * 事件里只带 URL，不带文件内容：本地文件已经写好，页面不需要再碰它。
+     */
+    data class FeedbackReady(val issueUrl: String) : SettingsEvent
 }
 
 /**
@@ -139,6 +148,10 @@ class SettingsViewModel @Inject constructor(
     private val serverModeSwitch: ServerModeSwitchCoordinator,
     /** 0.13：连接成功后把本机模型配置推给本机部署的服务端（远程地址会被策略挡掉）。 */
     private val llmConfigPusher: com.yap.app.data.remote.ServerLlmConfigPusher,
+    /** 0.14.2：检查更新（与前台自动检查共用同一个协调器与状态）。 */
+    private val updateCoordinator: UpdateCoordinator,
+    /** 0.14.2：反馈落盘（`files/feedback`）+ 生成 GitHub Issue 预填链接。 */
+    private val feedbackRepository: com.yap.app.data.repo.FeedbackRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val busy = MutableStateFlow(false)
@@ -211,8 +224,37 @@ class SettingsViewModel @Inject constructor(
     /** 用户手里那份备份文件：预览之后先拿着，等用户决定怎么接回来时再用。 */
     private var pendingBackup: String? = null
 
+    /** 设置页「更新」小节的状态：检查中 / 已是最新 / 有新版本 / 失败（失败只显示一行）。 */
+    val updateState: StateFlow<UpdateUiState> = updateCoordinator.state
+
     fun dismissMessage() {
         message.value = null
+    }
+
+    /**
+     * 提交一条反馈（0.14.2）。
+     *
+     * 顺序固定：**先落盘，再打开浏览器**。落盘成功 → 提示「已保存」并发事件让界面打开预填页；
+     * 落盘失败 → 只提示失败（什么都不打开，避免用户以为已经保存）。
+     *
+     * 界面在调用前已经用 `Feedback.validate` 拦过一次；这里不重复校验（仓储层还有一道）。
+     */
+    fun submitFeedback(
+        kind: com.yap.app.domain.FeedbackKind,
+        content: String,
+        contact: String
+    ) {
+        viewModelScope.launch {
+            val result = feedbackRepository.submit(
+                com.yap.app.domain.FeedbackDraft(kind = kind, content = content, contact = contact)
+            )
+            result.onSuccess { receipt ->
+                message.value = context.getString(R.string.feedback_saved)
+                events.send(SettingsEvent.FeedbackReady(receipt.issueUrl))
+            }.onFailure { error ->
+                message.value = ErrorText.of(context, error, R.string.feedback_save_failed)
+            }
+        }
     }
 
     fun setThemeMode(mode: ThemeMode) = launchSetting { settingsRepository.setThemeMode(mode) }
@@ -330,6 +372,26 @@ class SettingsViewModel @Inject constructor(
             busy.value = false
         }
     }
+
+    // ------------------------------------------------------------------
+    // 检查更新
+    // ------------------------------------------------------------------
+
+    /** 手动检查：不看节流、不看自动开关（用户点了一下就该真的查）。 */
+    fun checkForUpdates() {
+        viewModelScope.launch { updateCoordinator.checkNow() }
+    }
+
+    /** 打开设置页时的静默检查：受开关与 24h 节流约束，通常是一次 no-op。 */
+    fun maybeAutoCheckUpdates() {
+        viewModelScope.launch { updateCoordinator.maybeCheckOnStart() }
+    }
+
+    fun setUpdateAutoCheck(enabled: Boolean) =
+        launchSetting { updateCoordinator.setAutoCheckEnabled(enabled) }
+
+    fun setUpdateIncludePrereleases(enabled: Boolean) =
+        launchSetting { updateCoordinator.setIncludePrereleases(enabled) }
 
     // ------------------------------------------------------------------
     // 把他带走 / 从备份里接他回来
