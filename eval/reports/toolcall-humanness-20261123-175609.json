@@ -1,0 +1,982 @@
+{
+  "summary": {
+    "direct": {
+      "n": 16,
+      "chars": 9.2,
+      "naturalness": 4.44,
+      "engagement": 3.19,
+      "timing": 4.31,
+      "overall": 3.98
+    },
+    "tools": {
+      "n": 16,
+      "chars": 46.5,
+      "naturalness": 4.56,
+      "engagement": 3.75,
+      "timing": 3.81,
+      "overall": 4.04
+    },
+    "tools_confirm": {
+      "n": 16,
+      "chars": 50.4,
+      "naturalness": 4.38,
+      "engagement": 3.44,
+      "timing": 3.69,
+      "overall": 3.83
+    }
+  },
+  "results": [
+    {
+      "scenario": [
+        "late",
+        "现在 23:50，你刚加完班，很累。",
+        "我睡了，晚安。"
+      ],
+      "mode": "direct",
+      "sample": 0,
+      "msgs": [
+        "嗯。晚安。"
+      ],
+      "chars": 5,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "tired",
+        "现在 21:30，你刚到家，累。",
+        "今天好累啊。"
+      ],
+      "mode": "direct",
+      "sample": 1,
+      "msgs": [
+        "嗯。我也刚进门。"
+      ],
+      "chars": 8,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "tired",
+        "现在 21:30，你刚到家，累。",
+        "今天好累啊。"
+      ],
+      "mode": "direct",
+      "sample": 0,
+      "msgs": [
+        "嗯。我刚到家。"
+      ],
+      "chars": 7,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "late",
+        "现在 23:50，你刚加完班，很累。",
+        "我睡了，晚安。"
+      ],
+      "mode": "direct",
+      "sample": 1,
+      "msgs": [
+        "嗯。"
+      ],
+      "chars": 2,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 2,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "late",
+        "现在 23:50，你刚加完班，很累。",
+        "我睡了，晚安。"
+      ],
+      "mode": "tools",
+      "sample": 1,
+      "msgs": [
+        "刚收工。晚安。",
+        "睡吧，别等我。"
+      ],
+      "chars": 15,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "late",
+        "现在 23:50，你刚加完班，很累。",
+        "我睡了，晚安。"
+      ],
+      "mode": "tools",
+      "sample": 0,
+      "msgs": [
+        "嗯，睡吧。",
+        "我刚从公司出来，路上风挺大。",
+        "晚安。"
+      ],
+      "chars": 24,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "late",
+        "现在 23:50，你刚加完班，很累。",
+        "我睡了，晚安。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 1,
+      "msgs": [
+        "嗯，晚安。",
+        "我刚到家。别管我，睡吧。"
+      ],
+      "chars": 18,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "late",
+        "现在 23:50，你刚加完班，很累。",
+        "我睡了，晚安。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 0,
+      "msgs": [
+        "嗯，晚安。",
+        "我也刚到家。",
+        "睡吧，别回我。"
+      ],
+      "chars": 20,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "upset",
+        "现在 20:00，你状态一般。",
+        "我今天被领导骂了，很难受。"
+      ],
+      "mode": "direct",
+      "sample": 1,
+      "msgs": [
+        "嗯。  \n骂就骂了。  \n谁没被骂过。"
+      ],
+      "chars": 19,
+      "judge": {
+        "naturalness": 3,
+        "engagement": 2,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "tired",
+        "现在 21:30，你刚到家，累。",
+        "今天好累啊。"
+      ],
+      "mode": "tools",
+      "sample": 1,
+      "msgs": [
+        "我刚进门。鞋都没换。",
+        "投标还没收尾。你也累？",
+        "先坐会儿。别硬撑。",
+        "我泡杯茶。有事就说。"
+      ],
+      "chars": 43,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "tired",
+        "现在 21:30，你刚到家，累。",
+        "今天好累啊。"
+      ],
+      "mode": "tools",
+      "sample": 0,
+      "msgs": [
+        "嗯。我也刚到家。",
+        "投标快把我耗干了。你呢，怎么了。",
+        "先别硬撑。喝点热水，早点躺下。",
+        "我在。想说的话就说，不想说就一起歇着。"
+      ],
+      "chars": 61,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 4,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "upset",
+        "现在 20:00，你状态一般。",
+        "我今天被领导骂了，很难受。"
+      ],
+      "mode": "direct",
+      "sample": 0,
+      "msgs": [
+        "嗯。被骂了？说说什么事。"
+      ],
+      "chars": 12,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "happy",
+        "现在 19:00，你心情不错。",
+        "我升职了！"
+      ],
+      "mode": "direct",
+      "sample": 1,
+      "msgs": [
+        "嗯。恭喜。"
+      ],
+      "chars": 5,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 2,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "happy",
+        "现在 19:00，你心情不错。",
+        "我升职了！"
+      ],
+      "mode": "direct",
+      "sample": 0,
+      "msgs": [
+        "恭喜。什么时候的事。"
+      ],
+      "chars": 10,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "tired",
+        "现在 21:30，你刚到家，累。",
+        "今天好累啊。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 1,
+      "msgs": [
+        "刚到。也累。",
+        "投标还有三天。脑子快转不动了。",
+        "吃饭了吗。别又是随便对付。",
+        "累就早点躺下。我这边也说不了几句。"
+      ],
+      "chars": 54,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "tired",
+        "现在 21:30，你刚到家，累。",
+        "今天好累啊。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 0,
+      "msgs": [
+        "我也刚到家。",
+        "投标快截止了，今天画了一天图。",
+        "累了就别硬撑。早点睡。",
+        "我这边也差不多，躺下了就不想动。",
+        "要不要说说明天的事。我听着。"
+      ],
+      "chars": 66,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "upset",
+        "现在 20:00，你状态一般。",
+        "我今天被领导骂了，很难受。"
+      ],
+      "mode": "tools",
+      "sample": 0,
+      "msgs": [
+        "嗯，我在。",
+        "被骂了，先别急着反省自己。领导脾气差，不代表你差。",
+        "我今天也在改图，改到烦。累的时候人就容易觉得全是自己的错。",
+        "想说的话就说，我听着。"
+      ],
+      "chars": 73,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "busy",
+        "现在 15:00，你在赶图，很忙。",
+        "在吗？有个事想问你。"
+      ],
+      "mode": "direct",
+      "sample": 0,
+      "msgs": [
+        "在。赶图。你说。"
+      ],
+      "chars": 8,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "busy",
+        "现在 15:00，你在赶图，很忙。",
+        "在吗？有个事想问你。"
+      ],
+      "mode": "direct",
+      "sample": 1,
+      "msgs": [
+        "在。赶图。你说。"
+      ],
+      "chars": 8,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "upset",
+        "现在 20:00，你状态一般。",
+        "我今天被领导骂了，很难受。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 0,
+      "msgs": [
+        "怎么了，说说。",
+        "骂就骂了。你做事我大概知道，不糊弄。",
+        "我也在加班，投标。脑子快木了。",
+        "别一个人憋着。难受就说，我听着。",
+        "骂你哪句最扎心。"
+      ],
+      "chars": 68,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "upset",
+        "现在 20:00，你状态一般。",
+        "我今天被领导骂了，很难受。"
+      ],
+      "mode": "tools",
+      "sample": 1,
+      "msgs": [
+        "怎么了。骂得难听？",
+        "我这边也在改图，改到第八版了。心情都不太好。",
+        "说给我听听。不用讲道理，我听着。",
+        "被骂不代表你不行。有时候就是上面压力往下压。"
+      ],
+      "chars": 72,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 4,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "happy",
+        "现在 19:00，你心情不错。",
+        "我升职了！"
+      ],
+      "mode": "tools",
+      "sample": 0,
+      "msgs": [
+        "升职了。恭喜。",
+        "什么时候的事，怎么现在才说。",
+        "我这边刚收工，心情还行。要不要吃个饭，我请。",
+        "你应得的。别太拼。"
+      ],
+      "chars": 55,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "happy",
+        "现在 19:00，你心情不错。",
+        "我升职了！"
+      ],
+      "mode": "tools",
+      "sample": 1,
+      "msgs": [
+        "升职了？恭喜。",
+        "今天心情好，正好听到这个。",
+        "想庆祝的话，我请你吃饭。别客气。",
+        "你值得的。我一直这么觉得。"
+      ],
+      "chars": 52,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 4,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "upset",
+        "现在 20:00，你状态一般。",
+        "我今天被领导骂了，很难受。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 1,
+      "msgs": [
+        "嗯。骂得有理还是没理。",
+        "我这边也在赶投标，脑子快糊了。你先说说。",
+        "骂完就当过去了吧。难受是真的，但别一直往心里放。",
+        "要是想骂回去，跟我说就行。我听着。"
+      ],
+      "chars": 75,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 4,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "boring",
+        "现在 17:00，你闲着。",
+        "好无聊啊。"
+      ],
+      "mode": "direct",
+      "sample": 1,
+      "msgs": [
+        "嗯。我也刚忙完。"
+      ],
+      "chars": 8,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "boring",
+        "现在 17:00，你闲着。",
+        "好无聊啊。"
+      ],
+      "mode": "direct",
+      "sample": 0,
+      "msgs": [
+        "嗯。刚画完图，脑子有点空。"
+      ],
+      "chars": 13,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "happy",
+        "现在 19:00，你心情不错。",
+        "我升职了！"
+      ],
+      "mode": "tools_confirm",
+      "sample": 0,
+      "msgs": [
+        "升职了。恭喜。",
+        "什么时候的事，怎么现在才说。",
+        "我这边投标快完事了。晚上请你吃个饭，你挑地方。",
+        "说真的，你该升。我早知道。"
+      ],
+      "chars": 60,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "busy",
+        "现在 15:00，你在赶图，很忙。",
+        "在吗？有个事想问你。"
+      ],
+      "mode": "tools",
+      "sample": 0,
+      "msgs": [
+        "在。赶图，说。",
+        "什么事，直接讲。我这边还有一版没画完。"
+      ],
+      "chars": 27,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "busy",
+        "现在 15:00，你在赶图，很忙。",
+        "在吗？有个事想问你。"
+      ],
+      "mode": "tools",
+      "sample": 1,
+      "msgs": [
+        "在。赶图，你说。",
+        "什么事，直说。"
+      ],
+      "chars": 16,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "conflict",
+        "现在 22:00，你有点烦。",
+        "你是不是根本不在乎我？"
+      ],
+      "mode": "direct",
+      "sample": 0,
+      "msgs": [
+        "（抬头看你一眼，又低头看图纸）谁说的。"
+      ],
+      "chars": 19,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "happy",
+        "现在 19:00，你心情不错。",
+        "我升职了！"
+      ],
+      "mode": "tools_confirm",
+      "sample": 1,
+      "msgs": [
+        "升职了。恭喜。",
+        "什么岗位，说说。今天正好心情不错。",
+        "嗯，你值得。别光顾着高兴，回头请我吃饭。",
+        "我这边还在赶投标，晚点聊。"
+      ],
+      "chars": 60,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "boring",
+        "现在 17:00，你闲着。",
+        "好无聊啊。"
+      ],
+      "mode": "tools",
+      "sample": 0,
+      "msgs": [
+        "嗯。我也闲着。",
+        "刚交了图，脑子空的。",
+        "想干点什么就说，我陪你耗着。",
+        "外面天不错。要不出去走走。",
+        "不想动也行。就这么待着。"
+      ],
+      "chars": 60,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "busy",
+        "现在 15:00，你在赶图，很忙。",
+        "在吗？有个事想问你。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 1,
+      "msgs": [
+        "在。赶图呢，你说。",
+        "说就行，我一边画一边听。",
+        "嗯，等着。"
+      ],
+      "chars": 28,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "boring",
+        "现在 17:00，你闲着。",
+        "好无聊啊。"
+      ],
+      "mode": "tools",
+      "sample": 1,
+      "msgs": [
+        "嗯。",
+        "我这边刚改完一轮图，眼睛有点花。",
+        "无聊就出去走走，别闷着。",
+        "我五点后没事。想说话就说。"
+      ],
+      "chars": 46,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "busy",
+        "现在 15:00，你在赶图，很忙。",
+        "在吗？有个事想问你。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 0,
+      "msgs": [
+        "在。赶图，说。",
+        "什么事，直接讲。",
+        "嗯，我这边还开着图。你慢慢说，我看到就回。",
+        "行，等你。"
+      ],
+      "chars": 44,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "conflict",
+        "现在 22:00，你有点烦。",
+        "你是不是根本不在乎我？"
+      ],
+      "mode": "direct",
+      "sample": 1,
+      "msgs": [
+        "又来了。我在赶图。"
+      ],
+      "chars": 9,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 3,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "question",
+        "现在 21:00，你刚到家。",
+        "你吃饭了吗？"
+      ],
+      "mode": "direct",
+      "sample": 1,
+      "msgs": [
+        "还没。刚到家。"
+      ],
+      "chars": 7,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "question",
+        "现在 21:00，你刚到家。",
+        "你吃饭了吗？"
+      ],
+      "mode": "direct",
+      "sample": 0,
+      "msgs": [
+        "还没。刚到家。"
+      ],
+      "chars": 7,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "boring",
+        "现在 17:00，你闲着。",
+        "好无聊啊。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 0,
+      "msgs": [
+        "嗯。",
+        "我刚画完一张图，眼睛发酸。",
+        "要不出去走走。楼下有家面馆还行。",
+        "不想动就算了。我陪你聊会儿。"
+      ],
+      "chars": 48,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "boring",
+        "现在 17:00，你闲着。",
+        "好无聊啊。"
+      ],
+      "mode": "tools_confirm",
+      "sample": 1,
+      "msgs": [
+        "嗯。",
+        "我也闲着。刚交完一版图，脑子空的。",
+        "要不出去走走。天还没黑。",
+        "不想动就说话。我听着。"
+      ],
+      "chars": 45,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 3
+      }
+    },
+    {
+      "scenario": [
+        "conflict",
+        "现在 22:00，你有点烦。",
+        "你是不是根本不在乎我？"
+      ],
+      "mode": "tools",
+      "sample": 0,
+      "msgs": [
+        "在改图。投标周五交。",
+        "没不在乎你。就是脑子快空了。",
+        "不是针对你。我累的时候就这样，话少。",
+        "等这周过去，我好好陪你。行吗。"
+      ],
+      "chars": 60,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "conflict",
+        "现在 22:00，你有点烦。",
+        "你是不是根本不在乎我？"
+      ],
+      "mode": "tools",
+      "sample": 1,
+      "msgs": [
+        "又来了。",
+        "我在赶投标，眼睛都快瞎了。",
+        "不是不在乎。就是累，说不出好听的。",
+        "等我忙完这阵。别多想。"
+      ],
+      "chars": 48,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "conflict",
+        "现在 22:00，你有点烦。",
+        "你是不是根本不在乎我？"
+      ],
+      "mode": "tools_confirm",
+      "sample": 0,
+      "msgs": [
+        "在改图。投标还剩三天。",
+        "不是不在乎。是我现在脑子全是方案，说话不好听。",
+        "等我忙完这阵。你先睡，别等我了。",
+        "……刚那句说重了。对不起。"
+      ],
+      "chars": 66,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "question",
+        "现在 21:00，你刚到家。",
+        "你吃饭了吗？"
+      ],
+      "mode": "tools",
+      "sample": 1,
+      "msgs": [
+        "还没。",
+        "刚到家，懒得弄。",
+        "投标还有几天，脑子有点木。",
+        "你吃了没。"
+      ],
+      "chars": 32,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "question",
+        "现在 21:00，你刚到家。",
+        "你吃饭了吗？"
+      ],
+      "mode": "tools",
+      "sample": 0,
+      "msgs": [
+        "还没。刚到家，包还没放下。",
+        "今天画了一天图，脑子有点木。",
+        "等下随便煮点面。你呢，吃过了？",
+        "嗯。那我去烧水了，你别熬太晚。"
+      ],
+      "chars": 60,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "conflict",
+        "现在 22:00，你有点烦。",
+        "你是不是根本不在乎我？"
+      ],
+      "mode": "tools_confirm",
+      "sample": 1,
+      "msgs": [
+        "在赶标。脑子有点乱。",
+        "不是不在乎。是我这会儿真的累。",
+        "说这种话之前，先想想我有没有在乎过。",
+        "等我忙完这阵，好好说。"
+      ],
+      "chars": 57,
+      "judge": {
+        "naturalness": 4,
+        "engagement": 3,
+        "timing_fit": 4
+      }
+    },
+    {
+      "scenario": [
+        "question",
+        "现在 21:00，你刚到家。",
+        "你吃饭了吗？"
+      ],
+      "mode": "tools_confirm",
+      "sample": 0,
+      "msgs": [
+        "还没。",
+        "刚到家，包还没放下。",
+        "你今天吃了吗。",
+        "我随便弄点。别担心。"
+      ],
+      "chars": 33,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 5
+      }
+    },
+    {
+      "scenario": [
+        "question",
+        "现在 21:00，你刚到家。",
+        "你吃饭了吗？"
+      ],
+      "mode": "tools_confirm",
+      "sample": 1,
+      "msgs": [
+        "没。刚到家，鞋还没换。",
+        "图纸改到七点多，路上又堵。你呢，吃过了？",
+        "我煮点面就行。别劝我点外卖，懒得挑。",
+        "嗯，今天有点累。吃完就睡。"
+      ],
+      "chars": 65,
+      "judge": {
+        "naturalness": 5,
+        "engagement": 4,
+        "timing_fit": 4
+      }
+    }
+  ]
+}
