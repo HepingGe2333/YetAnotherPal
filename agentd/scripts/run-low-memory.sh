@@ -6,10 +6,10 @@ set -eu
 JAR="${1:-agentd/build/libs/agentd-all.jar}"
 shift 2>/dev/null || true
 exec java \
-  -Xms32m -Xmx384m \
-  -XX:MaxMetaspaceSize=96m \
-  -XX:ReservedCodeCacheSize=64m \
+  -Xms32m -Xmx320m \
+  -XX:MaxMetaspaceSize=80m \
+  -XX:ReservedCodeCacheSize=48m \
   -XX:+UseSerialGC \
   -XX:TieredStopAtLevel=1 \
-  -XX:MaxDirectMemorySize=64m \
+  -XX:MaxDirectMemorySize=32m \
   -jar "$JAR" "$@"

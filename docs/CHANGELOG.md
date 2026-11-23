@@ -40,8 +40,8 @@
 
 ## 0.14.2（内存优化，开发中）
 
-- **桌面/电脑端 agentd**：新增 `agentd/scripts/run-low-memory.sh`，固定 `-Xmx384m`、Metaspace 96m、
-  CodeCache 64m、直接内存 64m、SerialGC、C1；避免 16GB 机器默认按 1/4 物理内存选 4GB 堆。
+- **桌面/电脑端 agentd**：新增 `agentd/scripts/run-low-memory.sh`，固定 `-Xmx320m`、Metaspace 80m、
+  CodeCache 48m、直接内存 32m、SerialGC、C1；避免 16GB 机器默认按 1/4 物理内存选 4GB 堆。
   实测启动 RSS **约 78MB**（空闲），预算内 <500MB。
 - **Android 本地执行 ≤256MB**：图片内存缓存从 `min(可用×12%, 48MB)` 收紧为 `min(可用×8%, 24MB)`；
   新增表情帧 24MB、视频帧 12MB 预算常量与 `decodingCachesWithinBudget()`；

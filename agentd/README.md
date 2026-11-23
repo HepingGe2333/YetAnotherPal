@@ -1961,10 +1961,10 @@ The 83 tests added in this round:
 
 ## 低内存运行（≤500MB）
 
-默认 JVM 会按物理内存的 1/4 选最大堆；16GB 机器上看起来像 4GB。用脚本固定为 384MB 堆：
+默认 JVM 会按物理内存的 1/4 选最大堆；16GB 机器上看起来像 4GB。用脚本固定为 320MB 堆：
 
 ```bash
 agentd/scripts/run-low-memory.sh agentd/build/libs/agentd-all.jar --data /tmp/yap --port 8788
 ```
 
-预算：堆 384MB + Metaspace 96MB + CodeCache 64MB + 直接内存 64MB，常驻 RSS 约 350–480MB。
+预算：堆 320MB + Metaspace 80MB + CodeCache 48MB + 直接内存 32MB，理论上限约 480MB；实测空闲 RSS 约 78MB。
