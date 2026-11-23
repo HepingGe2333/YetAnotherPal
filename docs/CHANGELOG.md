@@ -37,6 +37,18 @@
 
 
 
+
+## 0.14.2（内存优化，开发中）
+
+- **桌面/电脑端 agentd**：新增 `agentd/scripts/run-low-memory.sh`，固定 `-Xmx384m`、Metaspace 96m、
+  CodeCache 64m、直接内存 64m、SerialGC、C1；避免 16GB 机器默认按 1/4 物理内存选 4GB 堆。
+  实测启动 RSS **约 78MB**（空闲），预算内 <500MB。
+- **Android 本地执行 ≤256MB**：图片内存缓存从 `min(可用×12%, 48MB)` 收紧为 `min(可用×8%, 24MB)`；
+  新增表情帧 24MB、视频帧 12MB 预算常量与 `decodingCachesWithinBudget()`；
+  `YapApplication.onTrimMemory/onLowMemory` 在系统压力下清 Coil 内存缓存；manifest 明确 `largeHeap=false`。
+- 新增/更新 `AppMemoryBudgetTest`；Android 单测 **2074 / 0 失败**，agentd **668 / 0 失败**。
+- 说明：移动端 256MB 是**预算/上限设计**，尚未在低端真机上用 Memory Profiler 实测；下一步需真机验收。
+
 ## 0.14.0（开发中）
 
 - **正在输入不再显示「…」占位气泡**：只显示输入指示，失败/停止不产生空消息。

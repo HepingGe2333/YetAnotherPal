@@ -54,6 +54,24 @@ class YapApplication : Application(), Configuration.Provider, ImageLoaderFactory
 
     override fun newImageLoader(): ImageLoader = imageLoader.get()
 
+    /**
+     * 0.14.2：系统内存紧张时主动把 Coil 的内存缓存吐回去。
+     *
+     * 图片缓存的上限已经压到 24MB，但「上限」不等于「系统压力下会自动归还」；
+     * 收到 RUNNING_LOW / COMPLETE 时清一次，避免聊天页 + 表情 + 视频帧叠加。
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+            runCatching { imageLoader.get().memoryCache?.clear() }
+        }
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        runCatching { imageLoader.get().memoryCache?.clear() }
+    }
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration

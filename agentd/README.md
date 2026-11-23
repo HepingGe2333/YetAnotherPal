@@ -1958,3 +1958,13 @@ The 83 tests added in this round:
   v5 still imports, bare file and `{mode,data}` envelope both work, merge semantics, client backup
   survives **import → export → import → export** byte-for-byte, server-created content round-trips,
   v7 is still rejected, and a broken media makes the import transactional.
+
+## 低内存运行（≤500MB）
+
+默认 JVM 会按物理内存的 1/4 选最大堆；16GB 机器上看起来像 4GB。用脚本固定为 384MB 堆：
+
+```bash
+agentd/scripts/run-low-memory.sh agentd/build/libs/agentd-all.jar --data /tmp/yap --port 8788
+```
+
+预算：堆 384MB + Metaspace 96MB + CodeCache 64MB + 直接内存 64MB，常驻 RSS 约 350–480MB。
