@@ -155,6 +155,7 @@ private class Console(private val store: FileStore) {
                     is SseEvent.Delta -> {
                         if (!printed) { print("他> "); printed = true }
                         print(event.text)
+                        System.out.flush()
                     }
                     is SseEvent.MessageCreated -> {
                         val m = event.message

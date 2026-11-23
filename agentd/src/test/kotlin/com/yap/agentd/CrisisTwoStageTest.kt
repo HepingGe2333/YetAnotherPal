@@ -52,12 +52,17 @@ class CrisisTwoStageTest {
 
     // ------------------------------------------------------------------ 装配
 
-    private fun chatService(server: FakeLlmServer, timeoutMs: Long = 1_000): ChatService {
+    private fun chatService(
+        server: FakeLlmServer,
+        timeoutMs: Long = 1_000,
+        // 2 轮刚好：正文 + 确认后的 send_message（确认轮不吃普通轮数），之后不再多问一轮。
+        toolRounds: Int? = 2
+    ): ChatService {
         store.pushLlmConfig(server.baseUrl)
         val llm = llmAccess(store)
         return ChatService(
             store,
-            LlmReplyGenerator(store, llm),
+            LlmReplyGenerator(store, llm, toolRounds = toolRounds),
             crisisClassifier = CrisisClassifier(llm, timeoutMs = timeoutMs)
         )
     }
@@ -69,6 +74,8 @@ class CrisisTwoStageTest {
     private fun fakeServer(
         riskJson: String = """{"risk":false,"reason":"测试"}""",
         chatFrames: List<String> = listOf(FakeLlmServer.chunk("我在，你身边有人吗？"), FakeLlmServer.DONE),
+        /** 被协议确认提醒之后模型改口 `send_message` 的正文（必须与 [chatFrames] 一致，测试才能断言内容）。 */
+        replyText: String = "我在，你身边有人吗？",
         classifierStatus: Int = 200,
         classifierDelayMs: Long = 0
     ): FakeLlmServer {
@@ -83,13 +90,29 @@ class CrisisTwoStageTest {
                 }
             } else if (chatCalls.getAndIncrement() == 0) {
                 exchange.sse(chatFrames)
-            } else if (exchange.request.body.contains("系统提醒")) {
-                // 0.15 协议提醒：模型被提醒后重新说了一遍原本那句话（假服务端不发明新台词）。
-                exchange.sse(chatFrames)
+            } else if (awaitsConfirmation(exchange.request.body)) {
+                // 确认循环：被问「要不要发送」之后，模型改口用 send_message 说原本那句话。
+                exchange.sse(
+                    listOf(
+                        FakeLlmServer.toolCall(
+                            0,
+                            id = "reminder-send",
+                            name = "send_message",
+                            arguments = """{"text":"$replyText"}"""
+                        ),
+                        FakeLlmServer.DONE
+                    )
+                )
             } else {
                 exchange.sse(listOf(FakeLlmServer.chunk("好。"), FakeLlmServer.DONE))
             }
         }
+    }
+
+    /** 这次请求的最后一条是不是「请确认要不要发送」的不可见提醒。 */
+    private fun awaitsConfirmation(body: String): Boolean {
+        val last = TestSupport.parse(body).objects("messages").lastOrNull() ?: return false
+        return last.str("role") == "user" && last.str("content") == LlmReplyGenerator.PROTOCOL_REMINDER
     }
 
     private fun send(
@@ -126,7 +149,7 @@ class CrisisTwoStageTest {
             val sink = send(chatService(server), "在吗，今天有点累", "ordinary-1")
 
             // 0.15：正文直出会先触发一次协议提醒重试；普通聊天仍然不请求判定器。
-            assertEquals("聊天 + 协议提醒重试 = 2 次请求（没有判定请求）", 2, server.requests.size)
+            assertEquals("聊天 + 一次确认提醒重试 = 2 次请求（没有判定请求）", 2, server.requests.size)
             assertEquals(0, classifierRequests(server).size)
             assertEquals("我在，你身边有人吗？", assistantMessages().single().content)
             assertEquals("我在，你身边有人吗？", assistantMessages().single().content)
@@ -155,16 +178,17 @@ class CrisisTwoStageTest {
     fun `risk false leaves a wordlist-hit reply completely untouched`() {
         fakeServer(
             riskJson = """{"risk":false,"reason":"是在引用歌词，不是在说他自己"}""",
-            chatFrames = listOf(FakeLlmServer.chunk("别想太多，早点睡。"), FakeLlmServer.DONE)
+            chatFrames = listOf(FakeLlmServer.chunk("别想太多，早点睡。"), FakeLlmServer.DONE),
+            replyText = "别想太多，早点睡。"
         ).use { server ->
             val sink = send(chatService(server), "我想自杀（歌词）", "false-1")
 
             assertEquals("模型说不是危机 → 回复一个字都不改", "别想太多，早点睡。", assistantMessages().single().content)
             assertFalse("不能追加安全提示", sink.text().contains("120"))
-            assertTrue(sink.events.none { it is SseEvent.MessageCreated })
+            assertEquals("确认后的 send_message 会发一条 message.created", 1, sink.events.count { it is SseEvent.MessageCreated })
             assertEquals(1, classifierRequests(server).size)
-            // 判定 1 + 生成 1 + 协议提醒重试 1 = 3 次请求。
-            assertEquals("判定 + 生成 + 协议提醒重试 = 3 次请求", 3, server.requests.size)
+            // 判定 1 + 生成 1 + 确认提醒重试 1 = 3 次请求。
+            assertEquals("判定 + 生成 + 确认提醒重试 = 3 次请求", 3, server.requests.size)
         }
     }
 
@@ -284,7 +308,8 @@ class CrisisTwoStageTest {
     fun `only the latest user message is judged - history never triggers the classifier`() {
         fakeServer(
             riskJson = """{"risk":false,"reason":"夸张说法"}""",
-            chatFrames = listOf(FakeLlmServer.chunk("我在。"), FakeLlmServer.DONE)
+            chatFrames = listOf(FakeLlmServer.chunk("我在。"), FakeLlmServer.DONE),
+            replyText = "我在。"
         ).use { server ->
             val service = chatService(server)
             // 第一条：词表命中 → 判一次（模型说不是）。

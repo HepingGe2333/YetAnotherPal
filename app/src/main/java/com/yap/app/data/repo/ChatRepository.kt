@@ -921,9 +921,10 @@ class ChatRepository @Inject constructor(
             // 变量每轮 generateAssistant 重新初始化，所以「结束后恢复 low」是自然结果，不需要收尾复位。
             var reasoningEffort = ReasoningEffort.DEFAULT
             var thinkCalledThisTurn = false
-            // 0.16 协议提醒：这一轮是否已经因为「只有正文、没有调工具」提醒过一次。
-            // 只在这里计数（同一轮最多一次），提醒本身不进数据库、也不进 toolTrace。
-            var protocolReminded = false
+            // 0.16 正文确认循环：这一轮已经因为「只有正文、没有调工具」问过模型几次
+            // （最多 ProtocolReminder.MAX_ATTEMPTS 次）。只在这里计数，提醒本身不进数据库、
+            // 也不进 toolTrace；问满之后仍然只有正文，就在收尾处丢弃（不落库、不走 legacy）。
+            var protocolAttempts = 0
             while (true) {
                 val buffer = StringBuilder()
                 adapter.streamChat(
@@ -955,28 +956,30 @@ class ChatRepository @Inject constructor(
                     // 数字（原生 tool_calls）与字符串（代码块）都认，见 ToolRounds.requested。
                     maxToolRounds = ToolRounds.merge(maxToolRounds, ToolRounds.requested(call))
                 }
-                // 0.16 工具协议：这一轮既没有 `send_message` / `stay_silent`、也没有任何别的工具，
-                // 却直接写出了正文——先别急着走兼容回退。把这段正文当作 assistant 消息塞回对话、
-                // 追加一条**不可见**的 user 提醒，然后带上工具重新请求一次（同一轮最多一次）。
-                // 这样「不守规矩」的回复还有机会变成一条真正的 send_message，而不是留一条 legacy。
+                // 0.16 工具协议（正文确认循环）：这一轮既没有 `send_message` / `stay_silent`、
+                // 也没有任何别的工具，却直接写出了正文——先别急着把它当回复。把这段正文当作
+                // assistant 消息塞回对话、追加一条**不可见**的 user 提醒，然后带上工具重新请求；
+                // 模型仍然只给正文就再问一次，同一轮最多 ProtocolReminder.MAX_ATTEMPTS 次。
+                // 问满之后仍然没有工具调用 → 收尾处丢弃（不落库、不做 legacy 回退）。
                 if (ProtocolReminder.shouldRemind(
                         hasToolCalls = calls.isNotEmpty(),
                         body = buffer.toString().trim(),
                         messagesSent = sentMessages.size,
                         silenced = silenced,
                         deferred = deferred,
-                        // 危机优先（0.15）：危机轮不提醒，多等一轮没有意义。
+                        // 危机优先（0.15）：危机轮不提醒，多等一轮没有意义；而且危机轮的正文
+                        // 必须落库（安全提示不能丢）。
                         // 判定本身失败过就当「不是危机」，不能让提醒分支把这一轮打崩。
                         crisis = runCatching { crisisJudgement.await().isCrisis }.getOrDefault(false),
-                        alreadyReminded = protocolReminded
+                        attempts = protocolAttempts
                     )
                 ) {
-                    protocolReminded = true
+                    protocolAttempts++
                     val reminderBody = buffer.toString().trim()
                     // 只进本地日志：提醒本身与模型刚才那段正文都不会落库。
                     android.util.Log.i(
                         "ChatRepository",
-                        ProtocolReminder.logLine(ProtocolReminder.MAX_ATTEMPTS, reminderBody.length)
+                        ProtocolReminder.logLine(protocolAttempts, reminderBody.length)
                     )
                     conversation += WireMessage("assistant", reminderBody)
                     conversation += WireMessage("user", ProtocolReminder.text(replyLanguage))
@@ -1225,6 +1228,22 @@ class ChatRepository @Inject constructor(
             // 模型明确说 risk=false 时，下面的危机兜底（补提示、不许沉默）完全不生效。
             // 大多数情况下这一行不花时间：判定在拼提示词之前就已经发出去，首轮流式早就跑完了。
             val crisisTurn = crisisJudgement.await().isCrisis
+            // 0.16 正文确认循环的终点：问过（最多 ProtocolReminder.MAX_ATTEMPTS 次）之后模型仍然
+            // 只给正文、没有调用 send_message——正文就**不落库、不 legacy**，这一轮按「没回」结束
+            // （日志 protocol_dropped 记问过几次、正文多长）。问过几次只影响日志，「丢不丢」只看
+            // 有没有 send_message（见 ProtocolReminder.shouldDrop）。
+            // 危机轮例外：危机优先（0.15）要求这一轮必须有可见的安全提示，丢掉会把安全网一起丢掉。
+            val protocolDropped = ProtocolReminder.shouldDrop(
+                body = finalText,
+                messagesSent = sentMessages.size,
+                crisis = crisisTurn
+            )
+            if (protocolDropped) {
+                android.util.Log.i(
+                    "ChatRepository",
+                    ProtocolReminder.dropLogLine(protocolAttempts, finalText.length)
+                )
+            }
             // 危机安全兜底（0.15）：用户说了危机语句、而他这一轮的话里没有任何安全锚点时，
             // 只在末尾补一句很短的提示——不覆盖他原本的话，也不改人设语气。
             // 第二段明确判成「不是危机」时整段跳过（词表只负责让它值得看一眼）。
@@ -1237,7 +1256,8 @@ class ChatRepository @Inject constructor(
                     note = crisisNote
                 )
             }
-            var replyText = finalText
+            // 丢弃的正文一个字都不再参与后续合并（安全提示只在危机轮出现，那时不会丢弃）。
+            var replyText = if (protocolDropped) "" else finalText
             if (safetyNote != null) {
                 if (replyText.isNotBlank()) {
                     replyText = replyText.trimEnd() + "\n" + safetyNote
@@ -1264,9 +1284,10 @@ class ChatRepository @Inject constructor(
             if (crisisTurn && sentMessages.isEmpty()) {
                 replyText = CrisisPriority.replyBody(crisisTurn, replyText, crisisNote)
             }
-            // 0.16 兼容回退（`spec/tool-call-agents/README.md` §1）：正文不再是正常通道。
-            // 旧版本 / 不守规矩的模型仍然会直接写出正文，这时整段落成**一条** legacy 消息，
-            // 并在 toolTrace 里标上 `legacy`（界面不显示，迁移判定与日志用它）。
+            // 0.16 兼容回退（`spec/tool-call-agents/README.md` §1）**只剩危机轮**：正常轮的正文
+            // 没有经过 send_message 确认就丢弃（上面的 protocolDropped），不再自动 legacy 发送。
+            // 危机轮仍保留这一条——安全提示必须落库；整段落成**一条** legacy 消息，并在 toolTrace
+            // 里标上 `legacy`（界面不显示，迁移判定与日志用它）。
             // 已经用 send_message 发过时，剩下的正文并进最后一条，绝不造第 5 个气泡。
             val pendingAttachments = toolAttachments.take(MAX_IMAGES_PER_MESSAGE)
             // 拆条函数仍然过一遍：回退路径保留「空行分段」的旧排版，只是合并成一条，不再拆成多个气泡。
@@ -1274,7 +1295,13 @@ class ChatRepository @Inject constructor(
             val legacyText = ExperienceRhythm.splitPlainReply(replyText).joinToString("\n\n")
             // 只发了一张表情、没写正文是合法的一轮（「点选即发送」另一种形态）：
             // 有附件就不算空流，否则会把刚发出去的表情一起丢掉。
-            if (legacyText.isBlank() && proposal == null && toolAttachments.isEmpty() && sentMessages.isEmpty()) {
+            // 被丢弃的正文不算空流：它在下面按「没回」结束，不该变成一次失败。
+            if (!protocolDropped &&
+                legacyText.isBlank() &&
+                proposal == null &&
+                toolAttachments.isEmpty() &&
+                sentMessages.isEmpty()
+            ) {
                 throw ApiException(NetworkErrorKind.EmptyStream)
             }
             // 协议违规的判定先做完，才决定要不要走兼容回退。
@@ -1293,8 +1320,10 @@ class ChatRepository @Inject constructor(
                     refreshPreview(session)
                 }
             }
-            if (legacyText.isNotBlank() && legacyFallback) {
-                // 兼容回退：模型没有走工具，正文直接落一条 legacy 消息（规范 §1 的回退条款）。
+            if (legacyText.isNotBlank() && legacyFallback && crisisTurn) {
+                // 兼容回退只给危机轮：正常轮的正文没走 send_message 就已经在上面丢弃了，
+                // 这里绝不能再自动把正文落库（0.16：正文不是消息通道）。
+                // 危机轮：模型没有走工具，正文直接落一条 legacy 消息，安全提示也靠它落库。
                 if (!typingDelayApplied) {
                     typingDelayApplied = true
                     kotlinx.coroutines.delay(
@@ -1375,6 +1404,14 @@ class ChatRepository @Inject constructor(
                 notifyAssistant(persona, sessionId, saved)
                 emit(GenerationEvent.MessageSent(saved))
                 shownText = ""
+            }
+            if (protocolDropped && lastSaved == null) {
+                // 没有确认过的正文、也没有工具产出的附件（表情/媒体）：这一轮不落任何 assistant 消息。
+                // 与 stay_silent 一样只留下「已读」，用户看不到一个字；不是模型选择的沉默，
+                // 所以用独立的原因让界面与日志区分开（界面同样不显示任何提示）。
+                completed = true
+                emit(GenerationEvent.Silent(SilentReason.PROTOCOL_DROPPED))
+                return@flow
             }
             val saved = lastSaved ?: throw ApiException(NetworkErrorKind.EmptyStream)
             completed = true

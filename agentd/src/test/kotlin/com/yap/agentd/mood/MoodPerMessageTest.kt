@@ -166,11 +166,25 @@ class MoodPerMessageTest {
 
     @Test
     fun `a failing mood judgement decays instead of blocking the reply`() {
+        val chatCalls = AtomicInteger()
         FakeLlmServer { exchange ->
             if (exchange.request.body.contains("情绪判定器")) {
                 exchange.json(500, """{"error":{"message":"boom"}}""")
+            } else if (chatCalls.getAndIncrement() == 0) {
+                // 现在：聊天回复必须用 send_message（正文不再算出口），否则会被确认循环丢弃。
+                exchange.sse(
+                    listOf(
+                        FakeLlmServer.toolCall(
+                            0,
+                            id = "send-1",
+                            name = "send_message",
+                            arguments = """{"text":"嗯，我在。"}"""
+                        ),
+                        FakeLlmServer.DONE
+                    )
+                )
             } else {
-                exchange.sse(listOf(FakeLlmServer.chunk("嗯，我在。"), FakeLlmServer.DONE))
+                exchange.sse(listOf(FakeLlmServer.chunk("（这句只是正在输入）"), FakeLlmServer.DONE))
             }
         }.use { server ->
             val llm = llmFor(server)

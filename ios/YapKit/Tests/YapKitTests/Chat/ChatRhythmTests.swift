@@ -25,6 +25,7 @@ final class ChatRhythmTests: XCTestCase {
     private let configId = "cfg-1"
     private let sessionId = "s-1"
     private let keychain = InMemoryKeychain()
+    private let tools = SpeakingToolRunner()
 
     /// 固定时钟：当地 01:00（正好落在默认作息 23:30–08:00 里）。
     private var nightNow: Int64 {
@@ -82,6 +83,7 @@ final class ChatRhythmTests: XCTestCase {
                 session: StubURLProtocol.makeSession(),
                 gate: LlmConcurrencyGate()
             ),
+            tools: tools,
             background: NoBackgroundTasks(),
             mood: mood,
             rhythm: rhythm,
@@ -106,6 +108,29 @@ final class ChatRhythmTests: XCTestCase {
         try apiKeys.setAPIKey("sk-test", for: configId)
     }
 
+
+    // MARK: - 0.15 协议夹具
+
+    /// `send_message` 的协议块（与生产协议同形）。
+    static func sendMessageBlock(_ text: String) -> String {
+        let escaped = text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return "```yap-tool\n{\"name\":\"send_message\",\"arguments\":{\"text\":\"\(escaped)\"}}\n```"
+    }
+
+    /// 模型按协议说话：一段 `send_message` + 工具回灌后的空白收尾。
+    private func enqueueSpoken(_ text: String) {
+        StubURLProtocol.enqueue(.sse(textDeltas: [Self.sendMessageBlock(text)]))
+        StubURLProtocol.enqueue(.sse(textDeltas: [" "]))
+    }
+
+    /// 只写正文的模型会被确认两次；第三次仍然只写正文 → 整轮丢弃（不落库）。
+    private func enqueueBodyOnlyDrop(_ text: String) {
+        for _ in 0..<3 { StubURLProtocol.enqueue(.sse(textDeltas: [text])) }
+    }
+
     private func collect(_ stream: AsyncThrowingStream<ChatEvent, Error>) async throws -> [ChatEvent] {
         var events: [ChatEvent] = []
         for try await event in stream { events.append(event) }
@@ -120,10 +145,7 @@ final class ChatRhythmTests: XCTestCase {
 
     /// 模型看到用户消息的那一刻要写 `readAt`（§2.3）。
     func testModelSeeingMessageMarksItRead() async throws {
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        enqueueSpoken("嗯")
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         let all = try messages()
@@ -226,10 +248,7 @@ final class ChatRhythmTests: XCTestCase {
         }
         XCTAssertEqual(try messages().filter { $0.role == .assistant }.count, 0, "没到阈值不该回")
 
-        StubURLProtocol.enqueue(.sse(textDeltas: ["……几点了"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["……几点了"]))
+        enqueueSpoken("……几点了")
         let events = try await collect(service.send(sessionId: sessionId, text: "起来啦"))
         XCTAssertFalse(events.contains { if case .noReply = $0 { return true } else { return false } })
 
@@ -250,10 +269,7 @@ final class ChatRhythmTests: XCTestCase {
         for text in ["喂", "醒醒"] {
             _ = try await collect(service.send(sessionId: sessionId, text: text))
         }
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        enqueueBodyOnlyDrop("嗯")
         _ = try await collect(service.send(sessionId: sessionId, text: "起来啦"))
         let userMessages = try messages().filter { $0.role == .user }
         XCTAssertEqual(userMessages.count, 3)
@@ -261,6 +277,25 @@ final class ChatRhythmTests: XCTestCase {
     }
 }
 
+
+/// 0.15：只会「按协议说话」的假执行器（没有别的工具）。
+private final class SpeakingToolRunner: ToolRunning {
+    func run(
+        _ invocation: ToolInvocation,
+        persona: PersonaEntity,
+        sessionId: String,
+        userMessageId: String?
+    ) async -> ToolResult {
+        guard invocation.name == ToolCatalog.sendMessage else {
+            return ToolResult(invocation: invocation, ok: true, summary: "做完了", contentForModel: "结果")
+        }
+        var result = ToolResult(
+            invocation: invocation, ok: true, summary: "发了条消息", contentForModel: "发出去了"
+        )
+        result.outboundText = invocation.argument("text")
+        return result
+    }
+}
 // MARK: - 假流
 
 private extension StubURLProtocol.Stub {

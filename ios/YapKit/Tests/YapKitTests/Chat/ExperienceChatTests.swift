@@ -108,6 +108,35 @@ final class ExperienceChatTests: XCTestCase {
         return events
     }
 
+
+    // MARK: - 0.15 协议确认循环的夹具
+
+    /// `send_message` 的协议块（与生产协议同形）。
+    static func sendMessageBlock(_ text: String) -> String {
+        let escaped = text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return "```yap-tool\n{\"name\":\"send_message\",\"arguments\":{\"text\":\"\(escaped)\"}}\n```"
+    }
+
+    /// 一次 `send_message` 的工具结果（真实执行器就是把正文交回来）。
+    private func sentResult(_ text: String) -> ToolResult {
+        var result = ToolResult(
+            invocation: ToolInvocation(id: UUID().uuidString, name: ToolCatalog.sendMessage,
+                                       argumentsJson: "{}"),
+            ok: true, summary: "发了条消息", contentForModel: "发出去了"
+        )
+        result.outboundText = text
+        return result
+    }
+
+    /// 只写正文的模型会被确认两次；两次之后仍然只写正文 → 整轮丢弃。
+    /// 只关心提示词拼装的用例用它（不落助手消息，也不会因为 stub 用尽而失败）。
+    private func enqueueBodyOnlyDrop(_ text: String) {
+        for _ in 0..<3 { StubURLProtocol.enqueue(.sse(textDeltas: [text])) }
+    }
+
     private func storedMessages() throws -> [MessageEntity] {
         try stores.messages.bySession(sessionId)
     }
@@ -157,10 +186,9 @@ final class ExperienceChatTests: XCTestCase {
         _ = try await collect(first)
 
         try unblockPersona()
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        tools.results.append(sentResult("嗯"))
+        StubURLProtocol.enqueue(.sse(textDeltas: [Self.sendMessageBlock("嗯")]))
+        StubURLProtocol.enqueue(.sse(textDeltas: [" "]))
         guard case .started(let second) = service.sendChecked(sessionId: sessionId, text: "现在呢") else {
             return XCTFail("应当返回流")
         }
@@ -181,14 +209,16 @@ final class ExperienceChatTests: XCTestCase {
     // MARK: - 连发：空行拆分、逐条独立消息、间隔
 
     func testPlainReplyIsSplitIntoIndependentMessagesWithGaps() async throws {
-        StubURLProtocol.enqueue(.sse(textDeltas: ["今天有点忙。\n\n晚点找你。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["今天有点忙。\n\n晚点找你。"]))
+        // 0.15 协议：每条用户可见消息都是一次 `send_message`；连发两条 → 两个独立气泡、两种延迟。
+        tools.results = [sentResult("今天有点忙。"), sentResult("晚点找你。")]
+        StubURLProtocol.enqueue(.sse(textDeltas: [
+            Self.sendMessageBlock("今天有点忙。") + "\n" + Self.sendMessageBlock("晚点找你。")
+        ]))
+        StubURLProtocol.enqueue(.sse(textDeltas: [" "]))
         let events = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         let assistant = try storedMessages().filter { $0.role == .assistant }
-        XCTAssertEqual(assistant.map(\.content), ["今天有点忙。", "晚点找你。"], "按空行拆成两条独立消息")
+        XCTAssertEqual(assistant.map(\.content), ["今天有点忙。", "晚点找你。"], "两次 send_message = 两条独立消息")
         XCTAssertEqual(appended(events).count, 2, "每一条都要通知界面（逐条出现）")
         XCTAssertEqual(doneEvent(events)?.message.content, "晚点找你。", "done 指向最后一条")
         // 一次首条延迟 + 一次连发间隔。
@@ -285,10 +315,7 @@ final class ExperienceChatTests: XCTestCase {
             personaId: personaId, sessionId: sessionId,
             thought: "他今天声音好轻", mood: MoodState(label: "平静", intensity: 2), at: now
         )
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]))
+        enqueueBodyOnlyDrop("嗯")
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         let wire = try lastRequestMessages()

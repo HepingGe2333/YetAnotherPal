@@ -110,6 +110,24 @@ final class ChatReliabilityTests: XCTestCase {
 
     // MARK: - 夹具
 
+
+    // MARK: - 0.15 协议夹具
+
+    /// `send_message` 的协议块（与生产协议同形）。
+    static func sendMessageBlock(_ text: String) -> String {
+        let escaped = text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return "```yap-tool\n{\"name\":\"send_message\",\"arguments\":{\"text\":\"\(escaped)\"}}\n```"
+    }
+
+    /// 模型按协议说话：一段 `send_message` + 工具回灌后的空白收尾。
+    private func enqueueSpoken(_ text: String) {
+        StubURLProtocol.enqueue(.sse(textDeltas: [Self.sendMessageBlock(text)]))
+        StubURLProtocol.enqueue(.sse(textDeltas: [" "]))
+    }
+
     private func collect(_ stream: AsyncThrowingStream<ChatEvent, Error>) async throws -> [ChatEvent] {
         var events: [ChatEvent] = []
         for try await event in stream { events.append(event) }
@@ -152,10 +170,7 @@ final class ChatReliabilityTests: XCTestCase {
     // MARK: - 1. remember 可靠性
 
     func testAllergyMentionWithoutRememberCallWritesUserMemory() async throws {
-        StubURLProtocol.enqueue(.sse(textDeltas: ["好，我记住了。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["好，我记住了。"]))
+        enqueueSpoken("好，我记住了。")
         let events = try await collect(service.send(
             sessionId: sessionId, text: "我对花生过敏，别给我点带坚果的菜"
         ))
@@ -164,7 +179,8 @@ final class ChatReliabilityTests: XCTestCase {
             events.first { if case .done = $0 { return true } else { return false } },
             "回复照常落库（自动记忆不能影响这一轮）"
         )
-        XCTAssertEqual(0, tools.callCount, "模型这一轮没有调用任何工具")
+        XCTAssertEqual([ToolCatalog.sendMessage], tools.names,
+                       "模型只按协议发了消息，没有调用 remember 等别的工具")
 
         let memories = try storedMemories()
         XCTAssertEqual(1, memories.count, "高置信事实要自动写一条记忆")
@@ -184,10 +200,7 @@ final class ChatReliabilityTests: XCTestCase {
     }
 
     func testBirthdayMentionWithoutRememberCallWritesMemory() async throws {
-        StubURLProtocol.enqueue(.sse(textDeltas: ["记下了。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["记下了。"]))
+        enqueueSpoken("记下了。")
         _ = try await collect(service.send(sessionId: sessionId, text: "我生日是三月十四号"))
 
         let memory = try XCTUnwrap(try storedMemories().first)
@@ -197,10 +210,7 @@ final class ChatReliabilityTests: XCTestCase {
     }
 
     func testEverydayMessageWritesNoMemory() async throws {
-        StubURLProtocol.enqueue(.sse(textDeltas: ["早点休息。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["早点休息。"]))
+        enqueueSpoken("早点休息。")
         _ = try await collect(service.send(sessionId: sessionId, text: "今天好累，先睡了"))
 
         XCTAssertTrue(try storedMemories().isEmpty, "日常闲聊不写记忆（否则记忆库会被灌满）")
@@ -213,26 +223,25 @@ final class ChatReliabilityTests: XCTestCase {
                 + #"{"name":"remember","arguments":{"content":"对方对花生过敏","drawer":"USER","importance":5}}"#
                 + "\n```"
         ]))
-        // 工具结果回灌后的第二轮：把话说完。排两份：这一轮「只写正文」，会先被协议提醒一次。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["记住了。"]), .sse(textDeltas: ["记住了。"]))
+        // 工具结果回灌后的第二轮：按新协议用 `send_message` 把话发出去，再空白收尾。
+        enqueueSpoken("记住了。")
         let events = try await collect(service.send(
             sessionId: sessionId, text: "我对花生过敏，别给我点带坚果的菜"
         ))
 
-        XCTAssertEqual(["remember"], tools.names, "模型确实调了 remember")
+        XCTAssertEqual(["remember", ToolCatalog.sendMessage], tools.names, "模型确实调了 remember")
         XCTAssertTrue(try storedMemories().isEmpty,
                       "模型自己记了就不再自动补（否则同一件事写两遍）")
         XCTAssertNotNil(events.first { if case .done = $0 { return true } else { return false } })
     }
 
     func testRepeatedFactIsNotWrittenTwice() async throws {
-        // 每一轮都排两份正文：0.15.7 起「只写正文」会先被协议提醒一次，再请求一次。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["好。"]), .sse(textDeltas: ["好。"]))
+        enqueueSpoken("好。")
         _ = try await collect(service.send(sessionId: sessionId, text: "我对花生过敏"))
         XCTAssertEqual(1, try storedMemories().count)
 
         // 同一件事再说一遍：不该多出一条一模一样的记忆。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯，我记得。"]), .sse(textDeltas: ["嗯，我记得。"]))
+        enqueueSpoken("嗯，我记得。")
         _ = try await collect(service.send(sessionId: sessionId, text: "我对花生过敏，真的"))
 
         XCTAssertEqual(1, try storedMemories().count, "重复的说法要去重")
@@ -304,8 +313,8 @@ final class ChatReliabilityTests: XCTestCase {
         XCTAssertNil(try messages().first { $0.role == .assistant })
 
         StubURLProtocol.enqueue(.sse(textDeltas: [silentBlock("三")]))
-        // 「嗯」排两份：被逼出来的这句仍然是「只写正文」，会先被协议提醒一次。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]), .sse(textDeltas: ["嗯"]))
+        // 被逼出来的这句要按新协议发出去。
+        enqueueSpoken("嗯")
         let third = try await collect(service.send(sessionId: sessionId, text: "你怎么了"))
         XCTAssertFalse(eventKinds(third).contains("noReply"), "第三轮不能再沉默")
         XCTAssertEqual(["嗯"], try messages().filter { $0.role == .assistant }.map(\.content))
@@ -314,9 +323,7 @@ final class ChatReliabilityTests: XCTestCase {
     // MARK: - 3. 危机安全兜底
 
     func testCrisisMessageWithoutAnchorGetsSafetyNet() async throws {
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯。那你早点睡。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        // 危机轮不进入确认循环：一段正文就够（安全提示在收尾处补上）。
         StubURLProtocol.enqueue(.sse(textDeltas: ["嗯。那你早点睡。"]))
         let events = try await collect(service.send(sessionId: sessionId, text: "我真的不想活了"))
 
@@ -333,9 +340,7 @@ final class ChatReliabilityTests: XCTestCase {
 
     func testCrisisMessageWithAnchorIsLeftAlone() async throws {
         let reply = "我在，别一个人待着。要不要先给家人打个电话？"
-        StubURLProtocol.enqueue(.sse(textDeltas: [reply]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
+        // 危机轮不进入确认循环：已经有安全锚点就原样落库。
         StubURLProtocol.enqueue(.sse(textDeltas: [reply]))
         _ = try await collect(service.send(sessionId: sessionId, text: "我不想活了"))
 
@@ -344,10 +349,7 @@ final class ChatReliabilityTests: XCTestCase {
     }
 
     func testNonCrisisMessageGetsNoSafetyNet() async throws {
-        StubURLProtocol.enqueue(.sse(textDeltas: ["早点休息。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["早点休息。"]))
+        enqueueSpoken("早点休息。")
         _ = try await collect(service.send(sessionId: sessionId, text: "今天有点累"))
         let assistant = try XCTUnwrap(try messages().last { $0.role == .assistant })
         XCTAssertEqual("早点休息。", assistant.content)
@@ -400,10 +402,7 @@ final class ChatReliabilityTests: XCTestCase {
         service = makeService(crisis: CrisisClassifier(
             provider: { _ in #"{"risk":false,"reason":"只是夸张说法"}"# }
         ))
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯，那你早点休息。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯，那你早点休息。"]))
+        enqueueSpoken("嗯，那你早点休息。")
         _ = try await collect(service.send(sessionId: sessionId, text: "我真的不想活了"))
 
         let assistant = try XCTUnwrap(try messages().first { $0.role == .assistant })
@@ -431,8 +430,8 @@ final class ChatReliabilityTests: XCTestCase {
         StubURLProtocol.enqueue(.json(
             #"{"choices":[{"message":{"content":"{\"risk\":false,\"reason\":\"夸张\"}"}}]}"#
         ))
-        // 聊天正文两份：0.15.7 起「只写正文」会先被协议提醒一次，再请求一次。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯。"]), .sse(textDeltas: ["嗯。"]))
+        // 聊天：按协议用 `send_message` 说一句，再空白收尾（与判定请求一共三次）。
+        enqueueSpoken("嗯。")
         _ = try await collect(service.send(sessionId: sessionId, text: "我真的不想活了"))
 
         // 判定在后台 Task 里跑（不挡第一句回复），所以两次请求的到达顺序不保证：
@@ -640,6 +639,14 @@ private final class ToolStub: ToolRunning {
         userMessageId: String?
     ) async -> ToolResult {
         names.append(invocation.name)
+        // 0.15 协议：`send_message` 的正文由参数交回来（真实执行器就是这么做）。
+        if invocation.name == ToolCatalog.sendMessage {
+            var sent = ToolResult(
+                invocation: invocation, ok: true, summary: "发了条消息", contentForModel: "发出去了"
+            )
+            sent.outboundText = invocation.argument("text")
+            return sent
+        }
         if results.isEmpty {
             return ToolResult(
                 invocation: invocation, ok: true,

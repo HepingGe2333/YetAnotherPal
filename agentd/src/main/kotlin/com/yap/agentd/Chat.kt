@@ -45,7 +45,7 @@ data class ReplyRequest(
  * 一次生成的产物（`ReplyGenerator` 的返回）。
  *
  * 为什么不再只返回 [Usage]：工具回路带来了三件「生成之外」的事，必须交给 [ChatService] 处理：
- * - [suppressed]（`stay_silent`）：**不落 assistant 消息**，只标已读；
+ * - [suppressed]（`stay_silent`；以及工具开着时未确认的正文被丢弃）：**不落 assistant 消息**，只标已读；
  * - [attachments]（`sticker.send`）：assistant 消息要带上的媒体引用；
  * - [toolTraceJson]：这一轮做过什么（客户端同形，落进消息表）。
  *
@@ -77,15 +77,18 @@ data class ReplyOutcome(
      * 0.16：这一轮的最终正文是**兼容回退**——模型一次 `send_message` 都没调用（旧模型/不支持
      * tools 的网关/关掉工具的降级路径）。`ChatService` 会把它当作一条 legacy assistant 消息落库
      * 并打一行日志计入提示词迁移指标；这不是正常路径，新提示词下不应出现。
+     *
+     * 工具开着时不再有这条路径：未确认的正文由 `LlmReplyGenerator` 的确认循环（2 轮）丢弃
+     * （`suppressed` + `protocol_dropped`）。危机轮与 `defer_reply` 轮的安全/兼容回退除外。
      */
     val legacy: Boolean = false,
     /**
-     * 0.15 UX：legacy 回退真正要落库的正文（可选）。
+     * legacy 回退真正要落库的正文（可选）。
      *
-     * 有协议提醒时，生成器会先让模型重试一次；如果重试仍然没调 `send_message`/`stay_silent`，
-     * 就回退到**重试时最新写的那段正文**（与 Android/iOS 一致）。[Chat.kt] 用它而不是
-     * `delta` 累加器，避免把提醒前后两段正文拼成一条消息。
-     * `null` = 老生成器/没有提醒：调用方仍然按 `delta` 拼正文（行为不变）。
+     * 只有协议不适用的路径会用到：关掉工具的纯文字降级、危机轮（安全提示优先）、
+     * `defer_reply` 轮（明确「晚点回」）。工具开着时未确认的正文一律不落库
+     * （生成器按 `protocol_dropped` 沉默收尾），所以这里不会是「提醒前/后两段拼接」。
+     * `null` = 老生成器/没有回退：调用方仍然按 `delta` 拼正文（行为不变）。
      */
     val legacyText: String? = null,
     /**
@@ -198,11 +201,15 @@ data class SendMessageRequest(
  * 正常路径只有一条：模型用 `send_message` 发声，这里按顺序落 N 条 assistant 消息（每条一个
  * `message.created`），最后用一个 `done` 收尾（`assistantMessageId` = 最后一条）。SSE 形状是
  * `accepted → message.created* → done`。三个兼容分支：
- * - **legacy**：整轮一次 `send_message` 都没有、但有正文（旧模型/旧提示词/关掉工具）→
+ * - **legacy**：整轮一次 `send_message` 都没有、但有正文（关掉工具的纯文字降级/旧生成器）→
  *   正文按空行拆成 1–3 条落库，仍发 `message.created`，并打一行「legacy 回退」日志；
  * - **只剩沉默**：`stay_silent` → 不落消息、`done.silent = true`（只已读）；
  * - **协议违规**：既没有 `send_message` 也没有 `stay_silent`（`defer_reply` 除外，它的语义本来就是
  *   这一轮不回）、连正文都没有 → 按沉默收尾并打日志，绝不落一条空消息污染历史。
+ *
+ * 工具开着时「只写正文、不调工具」也不再 legacy：`LlmReplyGenerator` 会先问模型
+ * 「要不要发送」（最多 2 轮），仍然不确认就把正文丢掉，返回 `suppressed`（日志 `protocol_dropped`），
+ * 这里走和 `stay_silent` 相同的 `done.silent` 分支。危机轮的安全提示与 `defer_reply` 不受影响。
  *
  * ### 危机两段式判定（0.15.2）
  * 「命中词表就算危机」太宽（「想死你了」「累得要死」），所以判定拆成两段：词表（`SafetyGuard`）
@@ -472,6 +479,8 @@ class ChatService(
             }
         }
         // 0.16：生成器一次 `send_message` 都没调用、却有正文 → legacy 兼容回退（按空行拆）。
+        // 现在只有「协议不适用」的路径能到这里（关掉工具 / 危机 / defer）；工具开着时的未确认
+        // 正文会被生成器按 `protocol_dropped` 丢弃，走上面的 silent 分支，不会打这一行。
         // 日志是「提示词迁移指标」：新提示词/新模型下这一行不该出现。
         val legacyFallback = !failed && !outcome.suppressed && outcome.messages.isEmpty() && replyTexts.isNotEmpty()
         if (legacyFallback) {

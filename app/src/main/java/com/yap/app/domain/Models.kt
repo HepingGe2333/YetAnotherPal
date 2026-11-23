@@ -153,7 +153,17 @@ enum class SilentReason {
      * 与 [DEFERRED] 的区别：defer 是「过一会儿再回」（会留下念头），这里是「这轮不回」（什么都不留）。
      * 界面同样**不显示任何提示**、不出现占位气泡；用户消息自己因为 readAt 非空显示「已读」。
      */
-    STAY_SILENT
+    STAY_SILENT,
+
+    /**
+     * 协议确认循环用尽：模型 [com.yap.app.domain.ProtocolReminder.MAX_ATTEMPTS] 轮都只输出正文、
+     * 没有调用任何工具，这一轮按「没回」结束。
+     *
+     * 与 [STAY_SILENT] 在界面上表现一致：不落任何 assistant 消息、不显示任何提示，用户只看到
+     * 用户消息的「已读」。区别只在原因——这不是模型自己选择的沉默，而是客户端**丢弃了没经过
+     * `send_message` 确认的正文**；日志里用 `protocol_dropped` 记录问过几次、正文多长。
+     */
+    PROTOCOL_DROPPED
 }
 
 data class EvolutionProposal(

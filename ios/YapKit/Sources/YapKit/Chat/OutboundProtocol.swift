@@ -7,8 +7,9 @@ import Foundation
 // 提示词负责「让模型想这么说话」，这个文件负责「客户端怎么认、怎么回灌、怎么兜底」：
 //
 // 1. 每条可见消息都必须由 `send_message` 产生；工具结果回灌 `messageId`，模型可以接着发；
-// 2. 最终正文里**没有** `send_message` 时只做兼容回退（落一条 `legacy` 消息并记日志），
-//    它不是新路径 —— 老模型 / 老提示词还会这么说话，聊天不能因此变哑；
+// 2. 最终正文里**没有** `send_message` 时**不自动落库、不 legacy**：协议确认循环问满 2 轮
+//    仍然只有正文就整段丢弃（`ProtocolReminder.shouldDrop`）。兼容回退只剩**危机轮**——
+//    安全提示必须落库；它仍然记一行 `legacy 回退`，用来观测「这一轮没走新协议」；
 // 3. 只有 `stay_silent` 时保持「已读不回」（在 `ChatService` 里拦截，不经过这里）；
 // 4. 旧版本写下的 assistant 消息没有工具痕迹：提示词补一句「那是旧版本直接说的」，
 //    但**不去补造**痕迹（历史是历史，不重写）。
@@ -43,7 +44,8 @@ public enum OutboundProtocol {
             + "想接着说下一句就再调用一次 send_message；说完了就直接结束这一轮，不要再输出正文。"
     }
 
-    /// 兼容回退的日志标记（§1：正文被当成一条 `send_message` 时要**标记 legacy**）。
+    /// 兼容回退的日志标记（§1）：0.15.0 之后**只剩危机轮**会走这条回退——
+    /// 正常轮没有 `send_message` 确认的正文已经在 `protocol_dropped` 分支丢弃。
     public static let legacyFallbackLogTag = "legacy 回退"
 
     /// 这条 assistant 消息是不是「旧版本直接说的」：没有 `toolTraceJson`（§3）。

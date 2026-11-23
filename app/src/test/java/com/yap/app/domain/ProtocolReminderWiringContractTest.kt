@@ -6,16 +6,18 @@ import org.junit.Test
 import java.io.File
 
 /**
- * 工具协议提醒的**接线契约**：规则与文案在 [ProtocolReminderTest] 里逐条测，
+ * 工具协议「正文确认循环」的**接线契约**：规则与文案在 [ProtocolReminderTest] 里逐条测，
  * 这里只钉「聊天主循环真的接上了」——因为 `ChatRepository.generateAssistant` 依赖
  * Android/Room，JVM 单测跑不动（本仓库的 `*WiringContractTest` 都是这个路子）。
  *
  * 要证明的事：
- * 1. 违规（只有正文、没有工具）时代码会先请求一次提醒，而不是直接落 legacy；
- * 2. 提醒的形态正确：模型那段正文当 `assistant`、提醒是**不可见**的 `user`，不落库；
- * 3. 提醒之后的响应照常走工具执行（send_message / stay_silent / 别的工具）；
- * 4. 同一轮最多一次；第二次仍违规才回到原来的 legacy 回退；
- * 5. 危机 / 拉黑 / 沉默的既有分支没有被挪动或绕过。
+ * 1. 违规（只有正文、没有工具）时代码先追问模型，而不是直接落 legacy；
+ * 2. 追问的形态正确：模型那段正文当 `assistant`、提醒是**不可见**的 `user`，不落库；
+ * 3. 追问之后照常带工具继续跑，最多两轮（计数器不是布尔）；
+ * 4. 两轮之后仍然只有正文 → **丢弃**：不落库、不走 legacy、不显示正文，只发一个
+ *    `Silent(PROTOCOL_DROPPED)`，日志 `protocol_dropped` 记次数与字数；
+ * 5. 正常轮的正文不再自动 legacy 落库（legacy 只留给危机轮）；
+ * 6. 危机 / 拉黑 / 沉默的既有分支没有被挪动或绕过，危机轮不会被丢弃。
  */
 class ProtocolReminderWiringContractTest {
 
@@ -35,12 +37,21 @@ class ProtocolReminderWiringContractTest {
         return index
     }
 
+    private fun slice(from: Int, length: Int): String =
+        chat.substring(from, minOf(chat.length, from + length))
+
     /** 从提醒分支的开头截一段，用来断言这一个块里做了什么、没做什么。 */
     private fun reminderBlock(): String {
         val start = indexOf("if (ProtocolReminder.shouldRemind(")
         val end = chat.indexOf("val silenceInCalls = calls.any(StaySilent::isSilence)", start)
         assertTrue("找不到提醒分支的结尾", end > start)
         return chat.substring(start, end)
+    }
+
+    /** 从丢弃判定截一段：判定参数 + 那一行日志。 */
+    private fun dropDecisionBlock(): String {
+        val start = indexOf("val protocolDropped = ProtocolReminder.shouldDrop(")
+        return slice(start, 700)
     }
 
     // ------------------------------------------------------------ 接线
@@ -78,25 +89,72 @@ class ProtocolReminderWiringContractTest {
         assertTrue("提醒后继续循环（下一次请求带 tools）", block.contains("continue"))
         // continue 在提醒之后：说明这一轮不会以 finalBody 结束，而是再请求一次。
         assertTrue(block.indexOf("ProtocolReminder.logLine") < block.lastIndexOf("continue"))
+        assertTrue(
+            "判定看的是「有没有工具调用」，正常工具轮不提醒",
+            block.contains("hasToolCalls = calls.isNotEmpty()")
+        )
     }
 
     @Test
-    fun `同一轮最多提醒一次 第二次仍违规才回退`() {
-        assertTrue("要有一个「这一轮提醒过没有」的标记", chat.contains("var protocolReminded = false"))
+    fun `同一轮最多问两次 计数器不是布尔`() {
+        assertTrue("要有一个「这一轮问过几次」的计数器", chat.contains("var protocolAttempts = 0"))
         val block = reminderBlock()
-        assertTrue("进入分支先立标记", block.contains("protocolReminded = true"))
-        assertTrue("判定时把标记传进去", block.contains("alreadyReminded = protocolReminded"))
-        // 标记在循环外初始化、循环内只置一次 true：第二轮 shouldRemind 直接返回 false。
-        assertTrue(chat.split("protocolReminded = true").size == 2)
+        assertTrue("进入分支先自增", block.contains("protocolAttempts++"))
+        assertTrue("判定时把已问次数传进去", block.contains("attempts = protocolAttempts"))
+        assertFalse("旧的一次性布尔必须消失", block.contains("alreadyReminded"))
+        // 计数器在循环外初始化、循环内只自增一处：第二轮仍然可以再问一次。
+        assertTrue("自增只有一处", chat.split("protocolAttempts++").size == 2)
+        // 上限来自纯规则（两轮），不在这里另写一个数字。
+        assertTrue(chat.contains("ProtocolReminder.MAX_ATTEMPTS"))
     }
 
     @Test
     fun `提醒只写本地日志 且带稳定标记`() {
         val block = reminderBlock()
-        assertTrue(block.contains("ProtocolReminder.logLine("))
+        assertTrue(block.contains("ProtocolReminder.logLine(protocolAttempts, reminderBody.length)"))
         assertTrue(block.contains("android.util.Log.i("))
         // 日志里不出现正文本身。
         assertFalse(block.contains("Log.i(\"ChatRepository\", reminderBody"))
+    }
+
+    // ------------------------------------------------------------ 两轮之后：丢弃
+
+    @Test
+    fun `两轮之后仍然只有正文就丢弃 不落库也不 legacy`() {
+        val block = dropDecisionBlock()
+        assertTrue(block.contains("body = finalText"))
+        assertTrue(block.contains("messagesSent = sentMessages.size"))
+        assertTrue("危机轮不参与丢弃（安全提示必须落库）", block.contains("crisis = crisisTurn"))
+        assertTrue(
+            "丢弃也要写日志：protocol_dropped + 问过几次 + 字数",
+            block.contains("ProtocolReminder.dropLogLine(protocolAttempts, finalText.length)")
+        )
+        assertTrue(block.contains("android.util.Log.i("))
+
+        val silent = indexOf("if (protocolDropped && lastSaved == null) {")
+        val branch = chat.substring(silent, chat.indexOf("return@flow", silent))
+        assertTrue(branch.contains("SilentReason.PROTOCOL_DROPPED"))
+        assertTrue("只发一个 Silent 事件", branch.contains("emit(GenerationEvent.Silent("))
+        assertFalse("丢弃不能落库", branch.contains("saveAssistantMessage("))
+        assertFalse("丢弃不能写消息表", branch.contains("messageDao."))
+        assertFalse("丢弃不能显示正文", branch.contains("GenerationEvent.MessageSent"))
+        assertFalse("丢弃不能打 legacy 日志", branch.contains("legacyLogLine"))
+        // 丢弃的正文不参与后面「并进最后一条」的合并（安全提示只在危机轮，不会冲突）。
+        assertTrue(chat.contains("var replyText = if (protocolDropped) \"\" else finalText"))
+        // 被丢弃的回合不是空流失败：有附件（表情/媒体）时只丢正文、附件照常落库。
+        assertTrue(chat.contains("if (!protocolDropped &&"))
+    }
+
+    @Test
+    fun `正常轮的正文不再自动 legacy 落库 legacy 只留给危机轮`() {
+        // 回退分支多了一个 crisisTurn 门槛：非危机轮永远走不到「正文直接落库」。
+        assertTrue(chat.contains("if (legacyText.isNotBlank() && legacyFallback && crisisTurn) {"))
+        assertTrue("正常轮的正文在更早的地方被丢弃", chat.contains("ProtocolReminder.shouldDrop("))
+        // 危机轮的回退路径原样保留（安全提示靠它落库）。
+        assertTrue(chat.contains("replyChannel = ToolTraceCodec.CHANNEL_LEGACY"))
+        assertTrue(chat.contains("AgentReplyProtocol.legacyLogLine(sentMessages.size, legacyText.length)"))
+        // 已经用 send_message 发过时，剩余正文仍然并进最后一条（不造第 5 个气泡）。
+        assertTrue(chat.contains("content = (previous.content + \"\\n\\n\" + legacyText.trim()).trim()"))
     }
 
     // ------------------------------------------------------------ 既有边界不被改变
@@ -111,6 +169,8 @@ class ProtocolReminderWiringContractTest {
         assertTrue(block.contains("runCatching"))
         // 危机优先拦工具的分支仍在（提醒没有绕开它）。
         assertTrue(chat.contains("CrisisPriority.blocksTool(crisisJudgement.await().isCrisis, call.name)"))
+        // 危机轮唯一的正文兜底仍在。
+        assertTrue(chat.contains("CrisisPriority.replyBody(crisisTurn, replyText, crisisNote)"))
     }
 
     @Test
@@ -122,15 +182,15 @@ class ProtocolReminderWiringContractTest {
         assertTrue("沉默的轮次不提醒", block.contains("silenced = silenced"))
         assertTrue("延后的轮次不提醒", block.contains("deferred = deferred"))
         assertTrue("发过消息的轮次不提醒", block.contains("messagesSent = sentMessages.size"))
+        // 沉默 / 延后的收尾仍在丢弃之前（它们有各自的 Silent 原因）。
+        assertTrue(chat.indexOf("SilentReason.STAY_SILENT") < indexOf("ProtocolReminder.shouldDrop("))
+        assertTrue(chat.indexOf("SilentReason.DEFERRED") < indexOf("ProtocolReminder.shouldDrop("))
     }
 
     @Test
-    fun `legacy 回退与迁移提示保持原样`() {
-        // 提醒只是「多一次机会」，回退条款本身一个字都不改。
-        assertTrue(chat.contains("AgentReplyProtocol.isLegacyFallback(sentMessages.size)"))
-        assertTrue(chat.contains("AgentReplyProtocol.legacyLogLine(sentMessages.size, legacyText.length)"))
-        assertTrue(chat.contains("replyChannel = ToolTraceCodec.CHANNEL_LEGACY"))
-        // 提醒用的语言跟人格语言走（不是界面语言）。
+    fun `提醒与丢弃文案都跟人格语言走`() {
+        val block = reminderBlock()
+        assertTrue(block.contains("ProtocolReminder.text(replyLanguage)"))
         assertTrue(chat.contains("val replyLanguage = PromptLanguage.resolve(persona.languageTag)"))
     }
 }

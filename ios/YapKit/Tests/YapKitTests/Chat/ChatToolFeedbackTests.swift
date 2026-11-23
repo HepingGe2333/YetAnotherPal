@@ -59,13 +59,11 @@ final class ChatToolFeedbackTests: XCTestCase {
             traceDetail: "对方怕冷"
         )
         let block = #"{"name":"remember","arguments":{"content":"对方怕冷","drawer":"USER","importance":3}}"#
-        StubURLProtocol.enqueue(
-            Self.sse(["嗯，我记一下。\n```yap-tool\n\(block)\n```"]),
-            Self.sse(["记住了，天冷的时候我会提醒你。"])
-        )
-        // 0.15.7 工具协议提醒：最后一次「只写正文」会被提醒一次、再请求一次，
-        // 同一段正文再排一份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(Self.sse(["记住了，天冷的时候我会提醒你。"]))
+        deliverSentMessages()
+        StubURLProtocol.enqueue(Self.sse(["嗯，我记一下。\n```yap-tool\n\(block)\n```"]))
+        // 0.15 协议：工具轮之后用 `send_message` 把话发出去，再回灌一轮空白收尾。
+        StubURLProtocol.enqueue(Self.sse([Self.sendMessageBlock("记住了，天冷的时候我会提醒你。")]))
+        StubURLProtocol.enqueue(Self.sse([" "]))
         service = makeService()
 
         var events: [ChatEvent] = []
@@ -73,18 +71,19 @@ final class ChatToolFeedbackTests: XCTestCase {
             events.append(event)
         }
 
-        XCTAssertEqual(tools.callCount, 1)
-        XCTAssertEqual(tools.lastName, "remember")
+        XCTAssertEqual(tools.callCount, 2, "remember 执行一次 + send_message 执行一次")
+        XCTAssertEqual(tools.names, ["remember", ToolCatalog.sendMessage])
         let done = try XCTUnwrap(doneEvent(events))
         XCTAssertEqual(done.message.content, "记住了，天冷的时候我会提醒你。")
         // 痕迹标题来自执行器（Android 的 ToolExecutor 也按结果给标题）。
         XCTAssertEqual(done.toolTraces.first?.title, "记住了")
         XCTAssertEqual(done.toolTraces.first?.subtitle, "对方怕冷")
-        XCTAssertEqual(ToolTraceCodec.decode(done.message.toolTraceJson), done.toolTraces)
+        // `send_message` 落库时先写空数组标记；真实痕迹挂在 `done.toolTraces` 上。
+        XCTAssertEqual(ToolTraceCodec.decode(done.message.toolTraceJson), [])
 
         // 回灌给模型的形状：`【工具结果】` + 摘要 + 结果 + 「接着把话说完」。
         XCTAssertEqual(StubURLProtocol.recordedBodies.count, 3,
-                       "工具一轮 + 回灌一轮 + 提醒后的重试一轮")
+                       "工具一轮 + 发送消息一轮 + 工具回灌一轮")
         let second = try JSONSerialization.jsonObject(with: StubURLProtocol.recordedBodies[1]) as? [String: Any]
         let messages = try XCTUnwrap(second?["messages"] as? [[String: Any]])
         let contents = messages.compactMap { $0["content"] as? String }
@@ -105,16 +104,10 @@ final class ChatToolFeedbackTests: XCTestCase {
             traceTitle: "联网搜索"
         )
         let block = #"{"name":"web_search","arguments":{"query":"天气"}}"#
-        StubURLProtocol.enqueue(
-            Self.sse(["我去看看。\n```yap-tool\n\(block)\n```"]),
-            Self.sse(["我这边查不了，凭印象说吧。"])
-        )
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(
-            Self.sse(["我去看看。\n```yap-tool\n\(block)\n```"]),
-            Self.sse(["我这边查不了，凭印象说吧。"])
-        )
+        deliverSentMessages()
+        StubURLProtocol.enqueue(Self.sse(["我去看看。\n```yap-tool\n\(block)\n```"]))
+        StubURLProtocol.enqueue(Self.sse([Self.sendMessageBlock("我这边查不了，凭印象说吧。")]))
+        StubURLProtocol.enqueue(Self.sse([" "]))
         service = makeService()
 
         var events: [ChatEvent] = []
@@ -140,17 +133,18 @@ final class ChatToolFeedbackTests: XCTestCase {
         let rules = ProactiveRuleService(stores: temp.stores, now: { 1_794_500_000_000 })
         service = makeService(proactive: rules)
 
-        let reply = """
-        好呀，那我们就这样约定。每天到了那个时间，我会先来找你。
-
+        let proposal = """
         ```yap-wake
         {"kind":"daily","time":"22:30","note":"每晚睡前问候","hint":"轻声问他今天过得怎么样"}
         ```
         """
-        StubURLProtocol.enqueue(Self.sse([reply]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(Self.sse([reply]))
+        // 0.15 协议：用户看得见的那句话走 `send_message`；提案块留在正文里，
+        // 工具回灌之后不再输出正文，只交回提案（它不是给用户看的文字）。
+        deliverSentMessages()
+        StubURLProtocol.enqueue(Self.sse([
+            Self.sendMessageBlock("好呀，那我们就这样约定。每天到了那个时间，我会先来找你。")
+        ]))
+        StubURLProtocol.enqueue(Self.sse([proposal]))
         var events: [ChatEvent] = []
         for try await event in service.send(sessionId: sessionId, text: "每天晚上十点半来问我一句") {
             events.append(event)
@@ -173,17 +167,14 @@ final class ChatToolFeedbackTests: XCTestCase {
     func testLegacyWakeBlockLanguageStillParsed() async throws {
         let rules = ProactiveRuleService(stores: temp.stores)
         service = makeService(proactive: rules)
-        let reply = """
-        好。
-
+        let proposal = """
         ```myfriend-proactive
         {"kind":"interval","intervalHours":3,"note":"每三小时问一句"}
         ```
         """
-        StubURLProtocol.enqueue(Self.sse([reply]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(Self.sse([reply]))
+        deliverSentMessages()
+        StubURLProtocol.enqueue(Self.sse([Self.sendMessageBlock("好。")]))
+        StubURLProtocol.enqueue(Self.sse([proposal]))
         for try await _ in service.send(sessionId: sessionId, text: "每隔几小时来陪我一下") {}
         let stored = try XCTUnwrap(try temp.stores.proactiveRules.byPersona(personaId).first)
         XCTAssertEqual(stored.kind, .interval)
@@ -204,10 +195,7 @@ final class ChatToolFeedbackTests: XCTestCase {
         let cards = PersonaCardRepository(stores: temp.stores)
         service = makeService(personaText: { cards.systemText($0) })
 
-        StubURLProtocol.enqueue(Self.sse(["在的。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(Self.sse(["在的。"]))
+        enqueueBodyOnlyDrop("在的。")
         for try await _ in service.send(sessionId: sessionId, text: "在吗") {}
 
         let body = try JSONSerialization.jsonObject(with: StubURLProtocol.recordedBodies[0]) as? [String: Any]
@@ -221,10 +209,7 @@ final class ChatToolFeedbackTests: XCTestCase {
     func testEmptyCardFallsBackToWrittenPrompt() async throws {
         let cards = PersonaCardRepository(stores: temp.stores)
         service = makeService(personaText: { cards.systemText($0) })
-        StubURLProtocol.enqueue(Self.sse(["在的。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(Self.sse(["在的。"]))
+        enqueueBodyOnlyDrop("在的。")
         for try await _ in service.send(sessionId: sessionId, text: "在吗") {}
         let body = try JSONSerialization.jsonObject(with: StubURLProtocol.recordedBodies[0]) as? [String: Any]
         let messages = try XCTUnwrap(body?["messages"] as? [[String: Any]])
@@ -233,6 +218,42 @@ final class ChatToolFeedbackTests: XCTestCase {
     }
 
     // MARK: - 夹具
+
+
+    // MARK: - 0.15 协议确认循环的夹具
+
+    /// `send_message` 的协议块（与生产协议同形）。
+    static func sendMessageBlock(_ text: String) -> String {
+        let escaped = text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return "```yap-tool\n{\"name\":\"send_message\",\"arguments\":{\"text\":\"\(escaped)\"}}\n```"
+    }
+
+    /// 只写正文的模型会被确认两次；两次之后仍然只写正文 → 整轮丢弃。
+    /// 只关心提示词拼装的用例用它（不落助手消息，也不会因为 stub 用尽而失败）。
+    private func enqueueBodyOnlyDrop(_ text: String) {
+        for _ in 0..<3 { StubURLProtocol.enqueue(Self.sse([text])) }
+    }
+
+    /// 让假执行器按 `send_message` 的参数把正文交回来；别的工具仍用 `tools.result`。
+    private func deliverSentMessages() {
+        tools.resultFor = { [weak self] invocation in
+            guard let self else {
+                return ToolResult(invocation: invocation, ok: true, summary: "做完了", contentForModel: "结果")
+            }
+            if invocation.name == ToolCatalog.sendMessage {
+                var sent = ToolResult(
+                    invocation: invocation, ok: true, summary: "发了条消息", contentForModel: "发出去了"
+                )
+                sent.outboundText = invocation.argument("text")
+                return sent
+            }
+            return self.tools.result
+                ?? ToolResult(invocation: invocation, ok: true, summary: "做完了", contentForModel: "结果")
+        }
+    }
 
     private func makeService(
         proactive: ProactiveRuleWriting? = nil,
@@ -288,8 +309,11 @@ final class ChatToolFeedbackTests: XCTestCase {
 
 private final class RecordingToolRunner: ToolRunning {
     var result: ToolResult?
+    /// 按调用分派结果（`send_message` 与别的工具混在一轮时用它）。
+    var resultFor: ((ToolInvocation) -> ToolResult)?
     private(set) var callCount = 0
     private(set) var lastName: String?
+    private(set) var names: [String] = []
 
     func run(
         _ invocation: ToolInvocation,
@@ -299,6 +323,8 @@ private final class RecordingToolRunner: ToolRunning {
     ) async -> ToolResult {
         callCount += 1
         lastName = invocation.name
+        names.append(invocation.name)
+        if let resultFor { return resultFor(invocation) }
         if let result { return result }
         return ToolResult(invocation: invocation, ok: true, summary: "做完了", contentForModel: "结果")
     }

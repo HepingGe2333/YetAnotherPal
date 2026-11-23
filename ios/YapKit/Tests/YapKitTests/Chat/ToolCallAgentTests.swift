@@ -175,10 +175,11 @@ final class ToolCallAgentTests: XCTestCase {
     // MARK: - 1. 提示词：只能通过 send_message 说话
 
     func testSystemPromptDeclaresSendMessageOnlyProtocol() async throws {
-        StubURLProtocol.enqueue(.sse(textDeltas: ["好"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["好"]))
+        // 0.15.0 协议确认循环：只写正文会被问两次；第三次仍然只写正文 → 整轮丢弃。
+        // 这条用例只关心提示词，所以三轮都排同一段正文。
+        for _ in 0..<3 {
+            StubURLProtocol.enqueue(.sse(textDeltas: ["好"]))
+        }
         _ = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
         let system = try systemPrompt()
@@ -272,22 +273,27 @@ final class ToolCallAgentTests: XCTestCase {
         XCTAssertLessThan(previewIndex, bubbleIndex, "预览在前，真气泡在工具完成后才出现")
     }
 
-    // MARK: - 4. 兼容回退：没有 send_message 的正文仍然落库，但标记 legacy
+    // MARK: - 4. 两次确认之后仍然只写正文 → 整段丢弃（不落库、不 legacy）
 
-    func testLegacyBodyFallbackIsLoggedAndStillSaved() async throws {
-        StubURLProtocol.enqueue(.sse(textDeltas: ["我在呢。"]))
-        // 0.15.7 工具协议提醒：第一次只写正文会被提醒一次、再请求一次，
-        // 同一段正文排两份（第二次仍然违规 → 按 legacy 落库，最终内容不变）。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["我在呢。"]))
+    func testBodyOnlyReplyIsDroppedAfterTwoConfirmations() async throws {
+        // 三段相同的正文：初稿 + 两次确认请求。第三次仍然没有工具调用 → 丢弃。
+        for _ in 0..<3 {
+            StubURLProtocol.enqueue(.sse(textDeltas: ["我在呢。"]))
+        }
         let events = try await collect(service.send(sessionId: sessionId, text: "在吗"))
 
-        let assistants = try assistantMessages()
-        XCTAssertEqual(assistants.map(\.content), ["我在呢。"], "老模型仍然能说话，不能变哑")
-        XCTAssertNil(assistants[0].toolTraceJson, "legacy 消息没有工具痕迹（也不补造）")
-        XCTAssertEqual(doneEvent(events)?.message.content, "我在呢。")
+        XCTAssertEqual(StubURLProtocol.recordedBodies.count, 3, "最多问两次，不能无限重试")
+        XCTAssertTrue(try assistantMessages().isEmpty, "没有 send_message 就没有消息落库")
+        XCTAssertTrue(events.contains { if case .noReply(.protocolDropped) = $0 { return true } else { return false } },
+                      "按 silent 收尾，而不是 legacy 落库")
+        XCTAssertFalse(events.contains { if case .done = $0 { return true } else { return false } })
         XCTAssertTrue(
+            logs.lines.contains { $0.contains(ProtocolReminder.droppedLogTag) },
+            "整段丢弃必须留下日志标记：\(logs.lines)"
+        )
+        XCTAssertFalse(
             logs.lines.contains { $0.contains(OutboundProtocol.legacyFallbackLogTag) },
-            "兼容回退必须留下日志标记：\(logs.lines)"
+            "不能再自动走 legacy：\(logs.lines)"
         )
     }
 

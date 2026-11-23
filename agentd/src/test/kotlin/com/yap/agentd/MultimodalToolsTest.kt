@@ -216,16 +216,27 @@ class MultimodalToolsTest {
         val userMessageId = attach(audioId, content = "听听我这条语音")
         val calls = java.util.concurrent.atomic.AtomicInteger()
         FakeLlmServer { exchange ->
-            if (calls.incrementAndGet() == 1) {
-                exchange.sse(
+            when (calls.incrementAndGet()) {
+                1 -> exchange.sse(
                     listOf(
                         FakeLlmServer.toolCall(0, id = "call-1", name = "listen", arguments = "{}"),
                         FakeLlmServer.usage(10, 2),
                         FakeLlmServer.DONE
                     )
                 )
-            } else {
-                exchange.sse(listOf(FakeLlmServer.chunk("听到了，你说周末想去看海。"), FakeLlmServer.DONE))
+                // 现在：听到内容之后必须用 send_message 说出去（正文不再算出口）。
+                2 -> exchange.sse(
+                    listOf(
+                        FakeLlmServer.toolCall(
+                            0,
+                            id = "call-send",
+                            name = "send_message",
+                            arguments = """{"text":"听到了，你说周末想去看海。"}"""
+                        ),
+                        FakeLlmServer.DONE
+                    )
+                )
+                else -> exchange.sse(listOf(FakeLlmServer.chunk("（这句只是正在输入）"), FakeLlmServer.DONE))
             }
         }.use { server ->
             store.pushLlmConfig(server.baseUrl)
@@ -252,7 +263,7 @@ class MultimodalToolsTest {
             ) { sink.emit(it) }
 
             assertTrue("这一轮说了一句话", outcome.textLength > 0)
-            // 0.15：第一次正文直出会触发一次协议提醒重试（模型第二次仍写正文 → legacy）。
+            // listen 一轮 + send_message 一轮 + 最后一段正文（只当「正在输入」）。
             assertEquals(3, server.requests.size)
             // 第二次请求里有一条 user 消息，content 是数组，里面就是 input_audio。
             val second = TestSupport.parse(server.requests[1].body)

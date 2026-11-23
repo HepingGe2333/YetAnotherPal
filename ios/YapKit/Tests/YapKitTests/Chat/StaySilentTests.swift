@@ -25,6 +25,7 @@ final class StaySilentTests: XCTestCase {
     private let configId = "cfg-1"
     private let sessionId = "s-1"
     private let keychain = InMemoryKeychain()
+    private let tools = SpeakingToolRunner()
 
     /// 白天 15:00：不睡觉，免得睡眠判定把这一轮的语义搅进来。
     private var dayNow: Int64 {
@@ -82,6 +83,7 @@ final class StaySilentTests: XCTestCase {
                 session: StubURLProtocol.makeSession(),
                 gate: LlmConcurrencyGate()
             ),
+            tools: tools,
             background: NoBackgroundTasks(),
             mood: mood,
             rhythm: rhythm,
@@ -165,8 +167,11 @@ final class StaySilentTests: XCTestCase {
 
         // 第三轮：模型还想沉默 → 服务拒绝，回灌「这轮得说句话」，再生成一次。
         StubURLProtocol.enqueue(.sse(textDeltas: [silentBlock("第三轮")]))
-        // 「嗯」排两份：被逼出来的这句仍然是「只写正文」，0.15.7 起会先被协议提醒一次。
-        StubURLProtocol.enqueue(.sse(textDeltas: ["嗯"]), .sse(textDeltas: ["嗯"]))
+        // 被逼出来的这句要按新协议发：`send_message` + 工具回灌后的空白收尾。
+        StubURLProtocol.enqueue(.sse(textDeltas: [
+            "```yap-tool\n{\"name\":\"send_message\",\"arguments\":{\"text\":\"嗯\"}}\n```"
+        ]))
+        StubURLProtocol.enqueue(.sse(textDeltas: [" "]))
         let events = try await collect(service.send(sessionId: sessionId, text: "你怎么了"))
         XCTAssertFalse(events.contains { if case .noReply = $0 { return true } else { return false } },
                        "第三轮不能再沉默")
@@ -239,6 +244,25 @@ final class StaySilentTests: XCTestCase {
     }
 }
 
+
+/// 0.15：只会「按协议说话」的假执行器（没有别的工具）。
+private final class SpeakingToolRunner: ToolRunning {
+    func run(
+        _ invocation: ToolInvocation,
+        persona: PersonaEntity,
+        sessionId: String,
+        userMessageId: String?
+    ) async -> ToolResult {
+        guard invocation.name == ToolCatalog.sendMessage else {
+            return ToolResult(invocation: invocation, ok: true, summary: "做完了", contentForModel: "结果")
+        }
+        var result = ToolResult(
+            invocation: invocation, ok: true, summary: "发了条消息", contentForModel: "发出去了"
+        )
+        result.outboundText = invocation.argument("text")
+        return result
+    }
+}
 // MARK: - 假流（与 ChatRhythmTests 同一份最简 SSE）
 
 private extension StubURLProtocol.Stub {

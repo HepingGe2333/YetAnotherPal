@@ -70,8 +70,8 @@ class LlmReplyGeneratorTest {
         return llmAccess(store)
     }
 
-    private fun send(access: LlmAccess, body: String): RecordingSink {
-        val generator = LlmReplyGenerator(store, access)
+    private fun send(access: LlmAccess, body: String, toolEnabled: Boolean = true): RecordingSink {
+        val generator = LlmReplyGenerator(store, access, toolEnabled = toolEnabled)
         val services = AgentdServices(store, replyGenerator = generator, llm = access)
         val sink = RecordingSink()
         AuthorityRoutes.stream(services, "POST", "/v1/sessions/$sessionId/messages", body, sink)
@@ -82,15 +82,17 @@ class LlmReplyGeneratorTest {
 
     @Test
     fun `real streaming deltas are forwarded and the assembled text is persisted`() {
-        val sink = send(access(), """{"clientMessageId":"llm-1","content":"你在干嘛"}""")
+        // 关掉工具 = 纯文字降级路径（老模型/不支持 tools 的网关）：没有 send_message 可调，
+        // 正文仍走 legacy 兼容回退；这里验证流式分片被原样转发、拼起来的正文落库。
+        // 开着工具时的确认循环见 `ProtocolReminderTest`。
+        val sink = send(access(), """{"clientMessageId":"llm-1","content":"你在干嘛"}""", toolEnabled = false)
 
         assertEquals(
-            // 协议提醒会先清掉第一遍的临时文字（空 delta），再流重试的那一遍。
-            listOf("accepted", "delta", "delta", "delta", "delta", "delta", "delta", "delta", "done"),
+            listOf("accepted", "delta", "delta", "delta", "done"),
             sink.types()
         )
         assertEquals(
-            listOf("在改图，", "第三版。", "晚点说。", "", "在改图，", "第三版。", "晚点说。"),
+            listOf("在改图，", "第三版。", "晚点说。"),
             sink.events.filterIsInstance<SseEvent.Delta>().map { it.text }
         )
 
@@ -98,12 +100,11 @@ class LlmReplyGeneratorTest {
         assertEquals(MessageRole.ASSISTANT, assistant.role)
         assertEquals("在改图，第三版。晚点说。", assistant.content)
         assertEquals(MessageSource.CHAT, assistant.source)
-        // 0.15：正文直出会触发一次协议提醒重试，两次模型调用的用量都要记（提醒不落库但要计费）。
-        assertEquals(60, assistant.promptTokens)
-        assertEquals(18, assistant.completionTokens)
+        assertEquals(30, assistant.promptTokens)
+        assertEquals(9, assistant.completionTokens)
         val done = sink.firstOf<SseEvent.Done>()
         assertEquals(assistant.id, done.assistantMessageId)
-        assertEquals(18, done.usage.completionTokens)
+        assertEquals(9, done.usage.completionTokens)
     }
 
     @Test

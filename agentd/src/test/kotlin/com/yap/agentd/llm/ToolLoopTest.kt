@@ -78,8 +78,8 @@ class ToolLoopTest {
     fun `tool call is executed and its result is fed back before the reply`() {
         val counter = AtomicInteger()
         FakeLlmServer { exchange ->
-            if (counter.getAndIncrement() == 0) {
-                exchange.sse(
+            when (counter.getAndIncrement()) {
+                0 -> exchange.sse(
                     listOf(
                         FakeLlmServer.toolCall(
                             0,
@@ -91,8 +91,19 @@ class ToolLoopTest {
                         FakeLlmServer.DONE
                     )
                 )
-            } else {
-                exchange.sse(listOf(FakeLlmServer.chunk("嗯，今天有点乏。"), FakeLlmServer.DONE))
+                // 现在：话只能通过 send_message 说出去（正文不再是出口）。
+                1 -> exchange.sse(
+                    listOf(
+                        FakeLlmServer.toolCall(
+                            0,
+                            id = "call_send",
+                            name = "send_message",
+                            arguments = """{"text":"嗯，今天有点乏。"}"""
+                        ),
+                        FakeLlmServer.DONE
+                    )
+                )
+                else -> exchange.sse(listOf(FakeLlmServer.chunk("（这句只是正在输入）"), FakeLlmServer.DONE))
             }
         }.use { server ->
             val service = chatService(llmFor(server))
@@ -101,7 +112,9 @@ class ToolLoopTest {
             assertEquals("accepted", sink.types().first())
             assertTrue("必须有 tool 事件", sink.types().contains("tool"))
             assertEquals("done", sink.types().last())
-            assertTrue("最终消息里要有模型的文字", sink.text().contains("有点乏"))
+            // 现在：文字通过 send_message 发出去 → 客户端收到的是 message.created（不是 delta）。
+            val created = sink.events.filterIsInstance<SseEvent.MessageCreated>().single()
+            assertTrue("最终消息里要有模型的文字", created.message.content.contains("有点乏"))
             assertFalse(sink.firstOf<SseEvent.Done>().silent)
 
             // 工具真的写了库。
@@ -151,15 +164,25 @@ class ToolLoopTest {
     fun `tool trace is persisted in the client shape`() {
         val counter = AtomicInteger()
         FakeLlmServer { exchange ->
-            if (counter.getAndIncrement() == 0) {
-                exchange.sse(
+            when (counter.getAndIncrement()) {
+                0 -> exchange.sse(
                     listOf(
                         FakeLlmServer.toolCall(0, id = "c1", name = "diary", arguments = """{"action":"add","content":"买牛奶"}"""),
                         FakeLlmServer.DONE
                     )
                 )
-            } else {
-                exchange.sse(listOf(FakeLlmServer.chunk("记下了。"), FakeLlmServer.DONE))
+                1 -> exchange.sse(
+                    listOf(
+                        FakeLlmServer.toolCall(
+                            0,
+                            id = "c-send",
+                            name = "send_message",
+                            arguments = """{"text":"记下了。"}"""
+                        ),
+                        FakeLlmServer.DONE
+                    )
+                )
+                else -> exchange.sse(listOf(FakeLlmServer.chunk("（这句只是正在输入）"), FakeLlmServer.DONE))
             }
         }.use { server ->
             send(chatService(llmFor(server)))
@@ -167,8 +190,9 @@ class ToolLoopTest {
             assertEquals(MessageRole.ASSISTANT, assistant.role)
             val trace = assistant.toolTraceJson ?: error("没有 toolTraceJson")
             val items = Json.parse(trace) as JsonValue.Arr
-            val item = items.items.single() as JsonValue.Obj
-            assertEquals("diary", (item.fields["name"] as JsonValue.Str).value)
+            val item = items.items
+                .filterIsInstance<JsonValue.Obj>()
+                .single { (it.fields["name"] as JsonValue.Str).value == "diary" }
             assertEquals("写日记", (item.fields["title"] as JsonValue.Str).value)
             assertEquals(true, (item.fields["ok"] as JsonValue.Bool).value)
         }
@@ -179,15 +203,25 @@ class ToolLoopTest {
         val sticker = store.createSticker(personaId, MediaMime.GIF, GIF, width = 1, height = 1)
         val counter = AtomicInteger()
         FakeLlmServer { exchange ->
-            if (counter.getAndIncrement() == 0) {
-                exchange.sse(
+            when (counter.getAndIncrement()) {
+                0 -> exchange.sse(
                     listOf(
                         FakeLlmServer.toolCall(0, id = "c1", name = "sticker", arguments = """{"action":"send","stickerId":"${sticker.id}"}"""),
                         FakeLlmServer.DONE
                     )
                 )
-            } else {
-                exchange.sse(listOf(FakeLlmServer.chunk("（发了个表情）"), FakeLlmServer.DONE))
+                1 -> exchange.sse(
+                    listOf(
+                        FakeLlmServer.toolCall(
+                            0,
+                            id = "c-send",
+                            name = "send_message",
+                            arguments = """{"text":"（发了个表情）"}"""
+                        ),
+                        FakeLlmServer.DONE
+                    )
+                )
+                else -> exchange.sse(listOf(FakeLlmServer.chunk("（这句只是正在输入）"), FakeLlmServer.DONE))
             }
         }.use { server ->
             send(chatService(llmFor(server)))

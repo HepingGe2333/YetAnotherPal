@@ -71,8 +71,8 @@ class ToolCallOnlyTest {
         return LlmAccess(LlmClient(), LlmConfigResolver(store, loopback = true))
     }
 
-    private fun chatService(llm: LlmAccess): ChatService =
-        ChatService(store, LlmReplyGenerator(store, llm, clock = clock.asClock()))
+    private fun chatService(llm: LlmAccess, toolRounds: Int? = null): ChatService =
+        ChatService(store, LlmReplyGenerator(store, llm, clock = clock.asClock(), toolRounds = toolRounds))
 
     private fun send(service: ChatService, clientMessageId: String = "c-1"): RecordingSink =
         RecordingSink().also { sink ->
@@ -87,6 +87,12 @@ class ToolCallOnlyTest {
         store.blockMessages(sessionId, 0).filter { it.role == MessageRole.ASSISTANT }
 
     private fun requestBody(server: FakeLlmServer, index: Int) = TestSupport.parse(server.requests[index].body)
+
+    /** 这次请求的最后一条是不是「请确认要不要发送」的不可见提醒。 */
+    private fun awaitsConfirmation(body: String): Boolean {
+        val last = TestSupport.parse(body).objects("messages").lastOrNull() ?: return false
+        return last.str("role") == "user" && last.str("content") == LlmReplyGenerator.PROTOCOL_REMINDER
+    }
 
     // ------------------------------------------------------------------ 1. send_message 是唯一出口
 
@@ -171,9 +177,15 @@ class ToolCallOnlyTest {
             exchange.sse(listOf(FakeLlmServer.chunk("第一段\n\n第二段"), FakeLlmServer.DONE))
         }.use { server ->
             val llm = llmFor(server)
-            // 生成器视角：这一轮没有 send_message、但有正文 → legacy = true。
+            // 关掉工具是**纯文字降级**路径（老模型/不支持 tools 的网关）：这里没有确认循环，
+            // 因为没有 send_message 可调；正文仍走 legacy 兼容回退（与 0.16 一致）。
             val userMessage = store.appendMessage(sessionId, MessageRole.USER, "说两句")
-            val outcome = LlmReplyGenerator(store, llm, clock = clock.asClock()).generate(
+            val outcome = LlmReplyGenerator(
+                store,
+                llm,
+                clock = clock.asClock(),
+                toolEnabled = false
+            ).generate(
                 ReplyRequest(
                     sessionId = sessionId,
                     personaId = personaId,
@@ -186,7 +198,10 @@ class ToolCallOnlyTest {
             assertTrue(outcome.messageIds.isEmpty())
 
             // 聊天层视角：正文按空行拆成两条落库，各发一条 message.created，最后只有一个 done。
-            val sink = send(chatService(llm), "legacy-1")
+            val sink = send(
+                ChatService(store, LlmReplyGenerator(store, llm, clock = clock.asClock(), toolEnabled = false)),
+                "legacy-1"
+            )
             val created = sink.events.filterIsInstance<SseEvent.MessageCreated>()
             assertEquals(listOf("第一段", "第二段"), created.map { it.message.content })
             assertEquals(2, assistants().size)
@@ -286,12 +301,29 @@ class ToolCallOnlyTest {
                         FakeLlmServer.DONE
                     )
                 )
-                else -> exchange.sse(listOf(FakeLlmServer.chunk("还没想好怎么回。"), FakeLlmServer.DONE))
+                // 正文直出之后会被问「要不要发送」：模型改口 send_message（确认轮在同一轮里）。
+                // 判断「上一条就是确认提醒」，避免把上下文里留着的旧提醒误当成新提醒。
+                else -> if (awaitsConfirmation(exchange.request.body)) {
+                    exchange.sse(
+                        listOf(
+                            FakeLlmServer.toolCall(
+                                0,
+                                id = "send-${round}",
+                                name = ServerToolCatalog.SEND_MESSAGE,
+                                arguments = """{"text":"还没想好怎么回。"}"""
+                            ),
+                            FakeLlmServer.DONE
+                        )
+                    )
+                } else {
+                    exchange.sse(listOf(FakeLlmServer.chunk("还没想好怎么回。"), FakeLlmServer.DONE))
+                }
             }
         }.use { server ->
-            val service = chatService(llmFor(server))
+            // 2 轮刚好：think + 正文，确认后的 send_message 不吃普通轮数。
+            val service = chatService(llmFor(server), toolRounds = 2)
             send(service, "effort-1")
-            // think 1 轮 + 正文直出一轮 + 协议提醒重试 1 轮 = 3 次请求。
+            // think 1 轮 + 正文直出一轮 + 确认提醒后的 send_message 1 轮 = 3 次请求。
             assertEquals(3, server.requests.size)
             assertEquals(
                 "主聊天默认 low",
@@ -304,14 +336,14 @@ class ToolCallOnlyTest {
                 requestBody(server, 1).stringAt("reasoning_effort")
             )
             assertEquals(
-                "协议提醒重试仍属于同一轮（think 之后 → high）",
+                "确认提醒后的重试仍属于同一轮（think 之后 → high）",
                 "high",
                 requestBody(server, 2).stringAt("reasoning_effort")
             )
 
             // 下一轮重新开始：恢复默认 low（think 只影响它所在的那一轮）。
             send(service, "effort-2")
-            // 正文直出 + 协议提醒重试各 1 次。
+            // 正文直出 + 确认提醒后 send_message 各 1 次。
             assertEquals(5, server.requests.size)
             assertEquals("low", requestBody(server, 3).stringAt("reasoning_effort"))
         }

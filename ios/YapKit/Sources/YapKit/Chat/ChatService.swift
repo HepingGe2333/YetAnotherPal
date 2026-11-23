@@ -32,6 +32,12 @@ public enum ChatNoReplyReason: Equatable, Sendable {
     /// 模型用 `stay_silent` 说「这一轮就不回」：不落消息、不留念头，只标已读
     ///（`spec/mood/README.md` §4）。
     case stayedSilent
+    /// 0.15.0：这一轮的正文没有经过 `send_message` 确认 —— 协议确认失败
+    ///（问满两轮仍然只写正文，或工具轮用尽之后才补写的正文）。
+    /// **整段丢弃**（不落库、不 legacy、不显示），按 silent 收尾；日志是 `protocol_dropped`。
+    /// 界面表现与 `stayedSilent` 一致（已读、不回），但原因不同：
+    /// 他不是选择沉默，而是没按协议把话发出来。
+    case protocolDropped
     /// 0.14：他在拉黑期（`spec/experience/README.md` §2）。用户消息照常落库并标 `blocked`，
     /// 但这一轮**不生成、不回**——界面看到的是「对方已将你拉黑」，不是「正在输入」。
     case blocked
@@ -79,7 +85,8 @@ public enum ChatEvent: Equatable, Sendable {
     /// 0.16（`spec/tool-call-agents/README.md` §1）：新协议下模型不再直接输出正文，
     /// 所以这条事件多数时候是**空串**，只用来表示「他还在输入」；
     /// 真正的气泡由 `send_message` 落库后的 `.appended` 产生。
-    /// 只有兼容回退（老模型 / 老提示词）时它才会带着正文出现。
+    /// 模型写正文时它也会带着正文出现（协议确认循环里先当输入指示显示）；
+    /// 两轮确认之后仍然没有 `send_message` 时，会再推一个空串把这段正文清掉。
     case delta(String)
     /// 他开始用一个工具（界面可以在这里显示「正在联网搜索…」）。
     case toolStarted(ToolTraceItem)
@@ -904,13 +911,10 @@ public final class ChatService {
             var toolRoundLimit = ExperienceContract.shared.clampToolRounds(requested: nil)
             var executed = Set<String>()
             var finalBody = ""
-            // 0.15.7 工具协议自动提醒（`ProtocolReminder`）：同一轮最多提醒 1 次。
-            //
-            // `protocolReminderTried` 是本轮已经用掉这次机会；`protocolReminderFallbackRaw`
-            // 是提醒**之前**模型写下的那段原文——只在「提醒之后它还是什么都没说」时兜底，
-            // 免得一次提醒把用户本来能看到的那句话弄丢。
-            var protocolReminderTried = false
-            var protocolReminderFallbackRaw = ""
+            // 0.15.0 工具协议**确认循环**（`ProtocolReminder`）：同一轮最多问 2 次
+            // 「这段话要不要发」。`protocolConfirmationRounds` 记录已经问过几次；
+            // 问满 `maxConfirmationRounds`（2）轮仍然没有 `send_message` → 整段丢弃。
+            var protocolConfirmationRounds = 0
             // 提醒之后的**那一次**请求不往界面上推字：模型刚才那句话已经显示过了，
             // 再推一遍会让同一句话闪两次（真机上是可见的抖动），而且还会再付一次打字延迟。
             // 只在这一次请求内为 true；工具回路恢复正常流式。
@@ -1159,25 +1163,29 @@ public final class ChatService {
                     let pendingBody = body.isEmpty
                         ? (calls.isEmpty ? buffer.trimmingCharacters(in: .whitespacesAndNewlines) : "")
                         : body
-                    // 0.15.7 工具协议自动提醒：这一轮**只有正文、没有任何工具调用**，
-                    // 而且还没有用 `send_message` 发出去过任何一条 —— 先提醒模型一次，
-                    // 让它把这句话用正确的方式说出来（见 `ProtocolReminder` 文件头）。
-                    //
-                    // 只提醒一次、且要求还有轮数余量（`round < toolRoundLimit`）：
-                    // 提醒之后总要留一次「带着 tools 重新请求」的机会，否则提醒没有意义。
-                    if calls.isEmpty,
-                       !pendingBody.isEmpty,
-                       !protocolReminderTried,
-                       sentCount == 0,
-                       producedMessage == nil,
-                       round < toolRoundLimit {
-                        protocolReminderTried = true
-                        protocolReminderFallbackRaw = buffer
+                    // 0.15.0 工具协议**确认循环**（`ProtocolReminder`，与 Android 同名规则一致）：
+                    // 只看两件事 —— 这一轮有没有 `send_message` 把话发出去、模型有没有写正文。
+                    // `messagesSent` 把「表情包」这类工具产出的消息也算进去（它们同样是一句话）。
+                    let messagesSent = producedMessage == nil ? sentCount : max(sentCount, 1)
+                    // 危机判定只在这里等一次：危机轮**不提醒**（安全提示不能等两轮追问），
+                    // 并且 `shouldDrop(crisis:)` 会保证它永远不会被丢弃。
+                    let crisisTurn = await crisisVerdict.value
+                    // 1) 该不该问？（纯规则：有工具 / 没正文 / 已发过 / 沉默 / 危机 / 问满 2 次 → 不问）
+                    if producedMessage == nil,
+                       round < toolRoundLimit,
+                       ProtocolReminder.shouldRemind(
+                           hasToolCalls: !calls.isEmpty,
+                           body: pendingBody,
+                           messagesSent: messagesSent,
+                           crisis: crisisTurn,
+                           attempts: protocolConfirmationRounds
+                       ) {
+                        protocolConfirmationRounds += 1
                         round += 1
-                        if let log {
-                            log("[chat] \(ProtocolReminder.logTag)：这一轮只输出了正文、没有调用工具，"
-                                + "先提醒模型一次（\(pendingBody.count) 字）")
-                        }
+                        let confirmLine = ProtocolReminder.logLine(
+                            attempt: protocolConfirmationRounds, chars: pendingBody.count
+                        )
+                        log?("[chat] \(confirmLine)")
                         // 正文当成 assistant 交回去，再追加一条**不可见**的 user 提醒：
                         // 它只活在这一次请求的 `conversation` 里，不显示、不落库。
                         conversation.append(WireMessage(role: "assistant", content: pendingBody))
@@ -1185,11 +1193,35 @@ public final class ChatService {
                             role: "user",
                             content: ProtocolReminder.text(language: personaLanguage)
                         ))
-                        // 界面上刚才那段文字**先留着**：提醒之后模型通常只是补一次工具调用；
+                        // 界面上刚才那段文字**先留着**：确认之后模型通常只是补一次工具调用；
                         // 真的改了措辞时，收尾那句 `finalText != shownText` 会把它替换掉。
                         // 这样既不会闪两次，也不会为同一句话付两次打字延迟。
                         suppressStreaming = true
                         continue
+                    }
+                    // 2) 该不该丢？**没有 `send_message` 确认过的正文一律不落库、不 legacy**：
+                    // 问满 2 轮仍然只有正文、或者工具轮用尽之后才补写的正文，都一样。
+                    // 危机轮例外（安全提示必须落库）；问过几次只影响日志。
+                    if producedMessage == nil,
+                       ProtocolReminder.shouldDrop(
+                           body: pendingBody, messagesSent: messagesSent, crisis: crisisTurn
+                       ) {
+                        // `yap-wake` 提案不是给用户看的正文：正文丢掉，副作用照常落库。
+                        if let proposal = ProactiveProtocol.extract(pendingBody).proposal {
+                            persistProactiveProposal(
+                                proposal: proposal, personaId: persona.id, sessionId: sessionId
+                            )
+                        }
+                        let dropLine = ProtocolReminder.dropLogLine(
+                            attempts: protocolConfirmationRounds, chars: pendingBody.count
+                        )
+                        log?("[chat] \(dropLine)")
+                        // 界面上可能还挂着模型刚写的那段正文：清掉它，别让「没确认的话」留在屏幕上。
+                        shownText = ""
+                        continuation.yield(.delta(""))
+                        continuation.yield(.noReply(.protocolDropped))
+                        continuation.finish()
+                        return
                     }
                     finalBody = pendingBody
                     break
@@ -1324,21 +1356,10 @@ public final class ChatService {
                 ))
             }
 
-            // 0.15.7：提醒之后模型**什么都没说**（既没有工具调用，也没有正文）时，
-            // 用提醒之前那段正文兜底 —— 一次提醒不该让用户本来能看到的那句话消失。
-            // 提醒之后仍然只写正文的情况走上面那条 `finalBody`，用的是它最新写的那段。
-            let remindedOnly = finalBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && !protocolReminderFallbackRaw.isEmpty
-                // 工具已经替他说过话（`send_message` / 表情）时不能用提醒前那段兜底：
-                // 否则同一句话会落成两条消息（用户看到两个一模一样的空气泡）。
-                && producedMessage == nil
-                && sentCount == 0
-            let rawFinal = remindedOnly
-                ? protocolReminderFallbackRaw
-                : finalBody.trimmingCharacters(in: .whitespacesAndNewlines)
-            if remindedOnly {
-                log?("[chat] \(ProtocolReminder.logTag)：提醒之后没有输出，按提醒前的正文收尾")
-            }
+            // 0.15.0：确认循环用尽仍然没有工具调用时已经提前按 silent 结束（见上面的
+            // `protocol_dropped` 分支），所以这里不可能再「兜底落一段提醒前的正文」。
+            // 能走到这里的正文只剩危机轮（安全提示必须落库）；正常轮已经在上面丢弃。
+            let rawFinal = finalBody.trimmingCharacters(in: .whitespacesAndNewlines)
             // 主动唤醒提案（`yap-wake`）：代码块不能给用户看，解析成规则交回上层并落库。
             let extracted = ProactiveProtocol.extract(rawFinal)
             var finalText = extracted.body
@@ -1364,6 +1385,8 @@ public final class ChatService {
                 // 把正文并进最后一条）：模型不再写正文是正常用法，不是「走神」。
                 // 直接把那条消息当成这一轮的产物结束掉，不要再落一条空助手消息。
                 completed = true
+                // 正文为空不代表没有副作用：模型可能在正文里交回了一个 `yap-wake` 提案
+                //（它不是给用户看的文字）。提案照常落库，别因为「这一轮没正文」丢掉。
                 // 0.15 危机兜底：这一轮的话全从工具发出去的（连发 / 表情），安全锚点也得补上，
                 // 否则用户看到的就是「他说了句别的，没接住我这句」。
                 var finalMessage = producedMessage
@@ -1381,6 +1404,11 @@ public final class ChatService {
                         // 没落库就保持库里那一份：库里存的与界面看到的必须是同一句话。
                         finalMessage = producedMessage
                     }
+                }
+                if let proposal {
+                    persistProactiveProposal(
+                        proposal: proposal, personaId: persona.id, sessionId: sessionId
+                    )
                 }
                 // 回复已经落库：高置信自动记忆兜底（模型这一轮没调 `remember` 时）。
                 autoRememberIfNeeded(
@@ -1425,18 +1453,18 @@ public final class ChatService {
                 continuation.yield(.delta(finalText))
             }
 
-            // 0.16 兼容回退（`spec/tool-call-agents/README.md` §1）：模型这一轮**没有**调用
-            // `send_message`（也没有用表情之类的工具替他说话），却写了正文。
-            //
-            // 这条正文不是新路径 —— 客户端仍然把它当成一句话落库（老模型 / 老提示词还会这么说话，
-            // 聊天不能因此变哑），但必须在日志里留下标记，否则「还有多少轮在走旧协议」永远看不出来。
+            // 0.16 兼容回退**只剩危机轮**（与 Android 一致）：正常轮的正文没有经过
+            // `send_message` 确认就已经在上面按 `protocol_dropped` 丢弃，绝不会再自动 legacy 发送。
+            // 危机轮例外：这一轮必须有可见的安全提示，丢掉会把安全网一起丢掉，
+            // 所以整段落成一条 legacy 消息，并在日志里留下标记（可观测「这一轮没走新协议」）。
             if sentCount == 0, producedMessage == nil {
                 log?("[chat] \(OutboundProtocol.legacyFallbackLogTag)：这一轮没有 send_message，"
                     + "最终正文按旧协议落库（\(finalText.count) 字）")
             }
 
-            // 0.14 §4：不走工具的回复按空行拆成 1–3 条（用了 `send_message` 时，正文也算一条，
+            // 0.14 §4：正文按空行拆成 1–3 条（用了 `send_message` 时，正文只算一条，
             // 总数仍然不超过 4 条）。每一条都是**独立的助手消息**，逐条出现。
+            // 0.15.0 之后走到这里的正文只可能是危机轮的 legacy 兜底，或工具已经说过话后的补充。
             let remainingSlots = MessageRhythm.maxMessagesPerRound - deliveredCount
             let chunkLimit = sentCount > 0
                 ? min(max(remainingSlots, 1), 1)

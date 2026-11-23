@@ -2087,10 +2087,20 @@ ChatService: persist every collected message (same id) → message.created ×N �
 
 ### Legacy fallback, silence, protocol violation
 
+A tool-enabled turn that only produces plain text is **not** persisted any more: the generator puts
+that body back as an assistant message, appends an invisible user reminder asking the model to
+confirm (*send it → `send_message(text)` / don't send → `stay_silent` / just thinking → no body*),
+and retries with tools. This happens at most **2** times (`[agentd] protocol_reminder`). If the
+model still writes plain text, the body is dropped: nothing persisted, `done.silent = true`, no
+`message.created`, and a `[agentd] protocol_dropped` stderr line — never an automatic legacy send.
+Crisis turns (safety note first) and `defer_reply` turns are not confirmed; neither are turns with
+tools disabled (pure-text degradation).
+
 | what the model did | what the server does |
 | --- | --- |
 | one or more `send_message` | persists exactly those messages (same ids), one `message.created` each, one `done` |
-| no `send_message`, but a final body (old model / no tools / old prompt) | **legacy fallback**: the body is split on blank lines into 1–3 messages, persisted (no tool trace), one `message.created` each, and a `[agentd] legacy 回退` stderr line is written as the prompt-migration metric |
+| no `send_message`, a body after 2 confirmation reminders (tools enabled, not crisis/defer) | **dropped as silent**: nothing persisted, `done.silent = true`, no `message.created`, `[agentd] protocol_dropped` log |
+| no `send_message`, but a final body (tools disabled / old generator / crisis / `defer_reply`) | **legacy fallback**: the body is split on blank lines into 1–3 messages, persisted (no tool trace), one `message.created` each, and a `[agentd] legacy 回退` stderr line is written as the prompt-migration metric |
 | `stay_silent` only | nothing persisted, session marked read, `done.silent = true`, no `message.created` |
 | `defer_reply` only | the intent is written, nothing persisted, `done.silent = true` (not a violation) |
 | a tool call and then nothing at all | nothing persisted, `done.silent = true`, plus a `[agentd] 协议违规` line (never an empty bubble) |
